@@ -6,12 +6,125 @@ Also checks and updates the bluetooth service if needed.
 """
 
 import filecmp
+import json
 import logging
 import subprocess
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 USER = "pollen"
+OWNERSHIP_MARKER = ".reachy_mini_ownership_ok.json"
+
+
+def _venv_site_packages(python_path: Path) -> Path | None:
+    """Return the first site-packages directory for a venv python path."""
+    venv_root = python_path.parent.parent
+    lib_dir = venv_root / "lib"
+    if not lib_dir.exists():
+        return None
+
+    for candidate in sorted(lib_dir.glob("python*/site-packages")):
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def _read_reachy_mini_install_info_from_site_packages(
+    python_path: Path,
+) -> dict[str, Any] | None:
+    """Read reachy_mini package metadata directly from a venv."""
+    site_packages = _venv_site_packages(python_path)
+    if site_packages is None:
+        return None
+
+    dist_infos = sorted(site_packages.glob("reachy_mini-*.dist-info"))
+    if not dist_infos:
+        return None
+
+    dist_info = dist_infos[-1]
+    info: dict[str, Any] = {"source": "pypi"}
+
+    metadata = dist_info / "METADATA"
+    if metadata.exists():
+        for line in metadata.read_text(errors="replace").splitlines():
+            if line.startswith("Version:"):
+                info["version"] = line.split(":", 1)[1].strip()
+                break
+
+    direct_url = dist_info / "direct_url.json"
+    if direct_url.exists():
+        try:
+            direct_info = json.loads(direct_url.read_text())
+        except json.JSONDecodeError:
+            direct_info = {}
+
+        if direct_info.get("dir_info", {}).get("editable"):
+            info["source"] = "editable"
+        elif "vcs_info" in direct_info:
+            vcs_info = direct_info["vcs_info"]
+            info["source"] = "git"
+            info["git_ref"] = vcs_info.get("requested_revision", "unknown")
+
+    egg_links = [
+        site_packages / "reachy-mini.egg-link",
+        site_packages / "reachy_mini.egg-link",
+    ]
+    if any(path.exists() for path in egg_links):
+        info["source"] = "editable"
+
+    return info if "version" in info else None
+
+
+def _ownership_snapshot(venvs_dir: Path, pollen_uid: int) -> dict[str, Any]:
+    """Capture cheap top-level state used to validate the ownership marker."""
+    root_stat = venvs_dir.stat()
+    entries = []
+    for item in sorted(venvs_dir.iterdir(), key=lambda path: path.name):
+        if item.name == OWNERSHIP_MARKER:
+            continue
+        try:
+            item_stat = item.stat()
+        except OSError:
+            continue
+        entries.append(
+            {
+                "name": item.name,
+                "uid": item_stat.st_uid,
+                "mtime_ns": item_stat.st_mtime_ns,
+                "ctime_ns": item_stat.st_ctime_ns,
+            }
+        )
+
+    return {
+        "version": 1,
+        "pollen_uid": pollen_uid,
+        "root": str(venvs_dir),
+        "root_uid": root_stat.st_uid,
+        "root_mtime_ns": root_stat.st_mtime_ns,
+        "root_ctime_ns": root_stat.st_ctime_ns,
+        "entries": entries,
+    }
+
+
+def _ownership_marker_valid(venvs_dir: Path, pollen_uid: int) -> bool:
+    marker = venvs_dir / OWNERSHIP_MARKER
+    if not marker.exists():
+        return False
+
+    try:
+        previous = json.loads(marker.read_text())
+        return previous == _ownership_snapshot(venvs_dir, pollen_uid)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+
+def _write_ownership_marker(venvs_dir: Path, pollen_uid: int) -> None:
+    marker = venvs_dir / OWNERSHIP_MARKER
+    try:
+        marker.write_text(json.dumps(_ownership_snapshot(venvs_dir, pollen_uid)))
+    except OSError as e:
+        print(f"Could not write ownership marker {marker}: {e}")
 
 
 def check_and_fix_venvs_ownership(
@@ -43,6 +156,10 @@ def check_and_fix_venvs_ownership(
         print(f"{venvs_path} exists but is not a directory")
         return
 
+    if _ownership_marker_valid(venvs_dir, pollen_uid):
+        print(f"Ownership marker valid for {venvs_path}; skipping recursive scan")
+        return
+
     # Check if any files are not owned by pollen
     needs_fix = False
     try:
@@ -69,12 +186,14 @@ def check_and_fix_venvs_ownership(
                 text=True,
             )
             print(f"Successfully fixed ownership of {venvs_path}")
+            _write_ownership_marker(venvs_dir, pollen_uid)
         except subprocess.CalledProcessError as e:
             print(f"Failed to fix ownership: {e.stderr}")
         except Exception as e:
             print(f"Unexpected error while fixing ownership: {e}")
     else:
         print(f"All files under {venvs_path} are owned by {USER}")
+        _write_ownership_marker(venvs_dir, pollen_uid)
 
 
 def check_and_update_bluetooth_service() -> None:
@@ -252,14 +371,15 @@ def check_and_update_wireless_launcher() -> None:
         print(f"Unexpected error while updating service: {e}")
 
 
-def check_and_sync_apps_venv_sdk() -> None:
+def check_and_sync_apps_venv_sdk(
+    apps_venv_python: Path | str = "/venvs/apps_venv/bin/python",
+) -> None:
     """Check if apps_venv SDK matches daemon install source and sync if needed.
 
     Compares both version AND install source (PyPI vs git ref). If daemon was
     installed from a git ref, apps_venv will be synced to the same ref.
 
     """
-    import json
     import os
 
     from .update_available import get_install_source
@@ -273,40 +393,14 @@ def check_and_sync_apps_venv_sdk() -> None:
         return
 
     # Check apps_venv exists
-    apps_venv_python = Path("/venvs/apps_venv/bin/python")
+    apps_venv_python = Path(apps_venv_python)
     if not apps_venv_python.exists():
         print("apps_venv not found, skipping SDK sync")
         return
 
-    # Get apps_venv install info by reading metadata directly (avoid importing from apps_venv)
-    try:
-        result = subprocess.run(
-            [
-                str(apps_venv_python),
-                "-c",
-                "import json; from importlib.metadata import distribution, version; "
-                "d = distribution('reachy_mini'); v = version('reachy_mini'); "
-                "r = {'version': v, 'source': 'pypi'}; "
-                "t = d.read_text('direct_url.json'); "
-                "u = json.loads(t) if t else None; "
-                "r.update({'source': 'editable'} if u and u.get('dir_info', {}).get('editable') else {}); "
-                "r.update({'source': 'git', 'git_ref': u.get('vcs_info', {}).get('requested_revision', 'unknown')} "
-                "if u and 'vcs_info' in u else {}); "
-                "print(json.dumps(r))",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode != 0:
-            print(f"Could not get apps_venv SDK info: {result.stderr}")
-            return
-        apps_info = json.loads(result.stdout.strip())
-    except subprocess.TimeoutExpired:
-        print("Timeout getting apps_venv SDK info")
-        return
-    except Exception as e:
-        print(f"Error getting apps_venv SDK info: {e}")
+    apps_info = _read_reachy_mini_install_info_from_site_packages(apps_venv_python)
+    if apps_info is None:
+        print("Could not get apps_venv SDK info from metadata")
         return
 
     print(
@@ -339,7 +433,15 @@ def check_and_sync_apps_venv_sdk() -> None:
     resolved_env = {**os.environ, **extra_env} if extra_env else None
 
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300, env=resolved_env, cwd=Path.home())
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env=resolved_env,
+            cwd=Path.home(),
+        )
         if result.returncode == 0:
             print("Successfully synced apps_venv SDK")
         else:
@@ -350,35 +452,27 @@ def check_and_sync_apps_venv_sdk() -> None:
         print(f"Error syncing apps_venv SDK: {e}")
 
 
-def check_and_fix_restore_venv() -> None:
+def check_and_fix_restore_venv(
+    restore_python: Path | str = "/restore/venvs/mini_daemon/bin/python",
+) -> None:
     """Check if restore venv has editable install and fix if needed.
 
     The restore partition at /restore/venvs should have a proper PyPI install,
     not an editable install. If an editable install is detected, reinstall
     from PyPI with a known good version.
     """
-    restore_python = Path("/restore/venvs/mini_daemon/bin/python")
+    restore_python = Path(restore_python)
 
     if not restore_python.exists():
         print("Restore venv not found, skipping")
         return
 
-    # Check if editable install
-    try:
-        result = subprocess.run(
-            [str(restore_python), "-m", "pip", "show", "reachy-mini"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except subprocess.TimeoutExpired:
-        print("Timeout checking restore venv")
-        return
-    except Exception as e:
-        print(f"Error checking restore venv: {e}")
+    install_info = _read_reachy_mini_install_info_from_site_packages(restore_python)
+    if install_info is None:
+        print("Could not get restore venv SDK info from metadata")
         return
 
-    if "Editable project location" in result.stdout:
+    if install_info["source"] == "editable":
         print("Legacy editable install detected in restore venv, reinstalling...")
         try:
             subprocess.run(

@@ -14,14 +14,15 @@ import threading
 import traceback
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from reachy_mini.reachy_mini import ReachyMini
+if TYPE_CHECKING:
+    from reachy_mini.reachy_mini import ReachyMini
 
 
 class ReachyMiniApp(ABC):
@@ -126,6 +127,8 @@ class ReachyMiniApp(ABC):
             settings_app_t.start()
 
         try:
+            from reachy_mini.reachy_mini import ReachyMini
+
             self.logger.info("Starting Reachy Mini app...")
             self.logger.info(f"Using media backend: {self.media_backend}")
             self.logger.info(f"Daemon on localhost: {self.daemon_on_localhost}")
@@ -151,7 +154,7 @@ class ReachyMiniApp(ABC):
                 settings_app_t.join()
 
     @abstractmethod
-    def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
+    def run(self, reachy_mini: "ReachyMini", stop_event: threading.Event) -> None:
         """Run the main logic of the app.
 
         Args:
