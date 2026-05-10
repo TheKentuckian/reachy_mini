@@ -155,7 +155,7 @@ class Daemon:
         self._media_released = True
         self._status.media_released = True
         self.logger.info("Media hardware released.")
-        log_event("daemon.media.release.complete")
+        log_event("daemon.media.release.complete", media_released=True)
 
     async def acquire_media(self) -> None:
         """Re-acquire camera and audio hardware after a release.
@@ -180,7 +180,7 @@ class Daemon:
         self._media_released = False
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
-        log_event("daemon.media.acquire.complete")
+        log_event("daemon.media.acquire.complete", media_released=False)
 
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
