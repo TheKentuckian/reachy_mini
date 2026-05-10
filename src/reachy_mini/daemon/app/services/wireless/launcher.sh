@@ -3,6 +3,8 @@ source /venvs/mini_daemon/bin/activate
 export GST_PLUGIN_PATH=$GST_PLUGIN_PATH:/opt/gst-plugins-rs/lib/aarch64-linux-gnu/
 export PATH=$PATH:/opt/uv
 export REACHY_DAEMON_INSTRUMENT=trace
+export LIBCAMERA_LOG_LEVELS=*:ERROR
+export GST_DEBUG=1
 
 # Ensure WiFi is not soft-blocked (can happen after a crash or kernel module reload)
 sudo rfkill unblock wifi
