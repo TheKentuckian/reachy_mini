@@ -297,7 +297,16 @@ def ensure_wifi_on_startup() -> None:
 
     for attempt in range(1, WIFI_INIT_MAX_RETRIES + 1):
         try:
-            # Make sure wlan0 is up and running
+            # Fast path: NM's cached state is authoritative when the device is
+            # already connected. Skip the ~4 s wifi_rescan() unless the
+            # interface is DISCONNECTED and we actually need to discover networks.
+            current_mode = get_current_wifi_mode()
+            if current_mode != WifiMode.DISCONNECTED:
+                logger.info(f"WiFi already active ({current_mode.value}), skipping rescan.")
+                return
+
+            # Disconnected: trigger a rescan so NM sees available networks,
+            # then ensure we have a hotspot to fall back to.
             scan_available_wifi()
 
             # If no WiFi connection is active, set up the default hotspot

@@ -162,6 +162,12 @@ def create_app(
                 f"Dataset updater started (interval: {args.dataset_update_interval_hours}h)"
             )
 
+        # Fire WiFi init as a background thread so it runs concurrently with
+        # daemon startup rather than blocking create_app() at import time.
+        if args.wireless_version:
+            with timing_event("daemon.wifi.startup_schedule"):
+                wifi_config.start_wifi_init_on_startup()
+
         try:
             with timing_event(
                 "fastapi.lifespan.startup",
@@ -297,9 +303,6 @@ def create_app(
         ):
             for _, wireless_router in wireless_routers:
                 app.include_router(wireless_router)
-        with timing_event("daemon.create_app.wifi_startup_schedule"):
-            wifi_config.start_wifi_init_on_startup()
-
     app_routers = (
         ("api", router),
         ("sdk_ws", sdk_ws.router),
