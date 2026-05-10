@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 DEFAULT_LOG_FILE = Path("/tmp/daemon.jsonl")
 
@@ -18,7 +19,12 @@ KEY_EVENTS = (
     "daemon.wireless_checks.apps_venv_sdk",
     "daemon.wireless_checks.restore_venv",
     "daemon.wireless_checks.asoundrc",
+    "daemon.media.construct",
     "daemon.create_app",
+    "daemon.backend.construct",
+    "daemon.media.start",
+    "daemon.central_relay.start",
+    "daemon.start",
     "fastapi.lifespan.startup",
     "daemon.uvicorn.startup",
 )
@@ -29,10 +35,10 @@ def _event_name(record: dict[str, Any]) -> str:
     return str(attrs.get("name") or record.get("event") or record.get("message") or "")
 
 
-def load_records(path: Path) -> list[dict[str, Any]]:
-    """Load JSONL records, skipping malformed lines."""
+def load_records_from_lines(lines: Iterable[str]) -> list[dict[str, Any]]:
+    """Load JSONL records from lines, skipping malformed entries."""
     records: list[dict[str, Any]] = []
-    for line in path.read_text().splitlines():
+    for line in lines:
         try:
             record = json.loads(line)
         except json.JSONDecodeError:
@@ -40,6 +46,11 @@ def load_records(path: Path) -> list[dict[str, Any]]:
         if isinstance(record, dict):
             records.append(record)
     return records
+
+
+def load_records(path: Path) -> list[dict[str, Any]]:
+    """Load JSONL records from a file, skipping malformed lines."""
+    return load_records_from_lines(path.read_text().splitlines())
 
 
 def latest_startup_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -103,13 +114,20 @@ def main() -> None:
     parser.add_argument(
         "log_file",
         nargs="?",
-        type=Path,
-        default=DEFAULT_LOG_FILE,
-        help=f"Path to daemon JSONL log (default: {DEFAULT_LOG_FILE})",
+        default=str(DEFAULT_LOG_FILE),
+        help=(
+            f"Path to daemon JSONL log (default: {DEFAULT_LOG_FILE}); "
+            "use '-' to read JSONL from stdin"
+        ),
     )
     args = parser.parse_args()
 
-    rows = summarize(load_records(args.log_file))
+    records = (
+        load_records_from_lines(sys.stdin)
+        if args.log_file == "-"
+        else load_records(Path(args.log_file))
+    )
+    rows = summarize(records)
     print(format_table(rows))
 
 
