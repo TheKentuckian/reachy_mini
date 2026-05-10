@@ -99,9 +99,19 @@ class Daemon:
             from reachy_mini.media.media_server import GstMediaServer
 
             try:
-                self._media_server = GstMediaServer(log_level, sim_mode=sim_mode)
+                with timing_event("daemon.media.construct"):
+                    self._media_server = GstMediaServer(log_level, sim_mode=sim_mode)
+                log_event(
+                    "daemon.media.camera_specs",
+                    camera_specs_name=self._media_server.camera_specs.name,
+                )
                 self._status.camera_specs_name = self._media_server.camera_specs.name
             except Exception as e:
+                log_event(
+                    "daemon.media.construct.error",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
                 self.logger.error(f"Failed to initialize media server: {e}")
                 self._media_server = None
         else:
@@ -129,14 +139,23 @@ class Daemon:
         Idempotent: no-op if already released or no media server.
         """
         if self._media_released or self._media_server is None:
+            log_event(
+                "daemon.media.release.skip",
+                already_released=self._media_released,
+                no_server=self._media_server is None,
+            )
             return
 
         self.logger.info("Releasing media hardware for direct access...")
-        self._media_server.stop()
-        await self._stop_central_signaling_relay()
+        log_event("daemon.media.release.start")
+        with timing_event("daemon.media.stop", source="release_media"):
+            self._media_server.stop()
+        with timing_event("daemon.central_relay.stop", source="release_media"):
+            await self._stop_central_signaling_relay()
         self._media_released = True
         self._status.media_released = True
         self.logger.info("Media hardware released.")
+        log_event("daemon.media.release.complete")
 
     async def acquire_media(self) -> None:
         """Re-acquire camera and audio hardware after a release.
@@ -145,14 +164,23 @@ class Daemon:
         Idempotent: no-op if not currently released or no media server.
         """
         if not self._media_released or self._media_server is None:
+            log_event(
+                "daemon.media.acquire.skip",
+                not_released=not self._media_released,
+                no_server=self._media_server is None,
+            )
             return
 
         self.logger.info("Re-acquiring media hardware...")
-        self._media_server.start()
-        await self._start_central_signaling_relay()
+        log_event("daemon.media.acquire.start")
+        with timing_event("daemon.media.start", source="acquire_media"):
+            self._media_server.start()
+        with timing_event("daemon.central_relay.start", source="acquire_media"):
+            await self._start_central_signaling_relay()
         self._media_released = False
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
+        log_event("daemon.media.acquire.complete")
 
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
@@ -436,9 +464,10 @@ class Daemon:
                 # Stop pipeline (NULL) to release camera/audio hardware so
                 # external tools (rpicam-still, etc.) can access them.
                 # start() will rebuild the pipeline from scratch.
-                self._media_server.stop()
-                # Stop the central signaling relay
-                await self._stop_central_signaling_relay()
+                with timing_event("daemon.media.stop", source="daemon.stop"):
+                    self._media_server.stop()
+                with timing_event("daemon.central_relay.stop", source="daemon.stop"):
+                    await self._stop_central_signaling_relay()
 
             if goto_sleep_on_stop:
                 try:

@@ -8,6 +8,8 @@ import nmcli
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from reachy_mini.daemon.instrumentation import log_event, timing_event
+
 HOTSPOT_SSID = "reachy-mini-ap"
 HOTSPOT_PASSWORD = "reachy-mini"
 
@@ -17,6 +19,7 @@ router = APIRouter(
 )
 
 busy_lock = Lock()
+wifi_init_lock = Lock()
 error: Exception | None = None
 logger = logging.getLogger(__name__)
 
@@ -280,6 +283,7 @@ def remove_connection(name: str) -> None:
 WIFI_INIT_MAX_RETRIES = 5
 WIFI_INIT_RETRY_DELAY = 3  # seconds
 WIFI_INIT_TIMEOUT = 30  # seconds
+_wifi_init_thread: Thread | None = None
 
 
 def ensure_wifi_on_startup() -> None:
@@ -319,11 +323,44 @@ def ensure_wifi_on_startup() -> None:
     )
 
 
-_wifi_init_thread = Thread(target=ensure_wifi_on_startup, daemon=True)
-_wifi_init_thread.start()
-_wifi_init_thread.join(timeout=WIFI_INIT_TIMEOUT)
-if _wifi_init_thread.is_alive():
-    logger.error(
-        f"WiFi initialization timed out after {WIFI_INIT_TIMEOUT}s. "
-        "Daemon will start without WiFi configured."
-    )
+def _run_wifi_init_on_startup() -> None:
+    with timing_event("daemon.wifi.startup_init"):
+        ensure_wifi_on_startup()
+
+
+def start_wifi_init_on_startup(
+    *,
+    block: bool = False,
+    timeout: float = WIFI_INIT_TIMEOUT,
+) -> Thread:
+    """Start WiFi initialization once, without making router import block."""
+    global _wifi_init_thread
+
+    with wifi_init_lock:
+        if _wifi_init_thread is None or not _wifi_init_thread.is_alive():
+            _wifi_init_thread = Thread(
+                target=_run_wifi_init_on_startup,
+                daemon=True,
+                name="reachy-mini-wifi-init",
+            )
+            _wifi_init_thread.start()
+            log_event(
+                "daemon.wifi.startup_init.started",
+                block=block,
+                timeout_s=timeout,
+            )
+        thread = _wifi_init_thread
+
+    if block:
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            logger.error(
+                f"WiFi initialization timed out after {timeout}s. "
+                "Daemon will start without WiFi configured."
+            )
+            log_event(
+                "daemon.wifi.startup_init.timeout",
+                timeout_s=timeout,
+            )
+
+    return thread

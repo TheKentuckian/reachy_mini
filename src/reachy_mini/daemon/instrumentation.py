@@ -13,6 +13,14 @@ from typing import Any
 
 INSTRUMENT_ENV_VAR = "REACHY_DAEMON_INSTRUMENT"
 
+# Cached mode set by configure_daemon_logging() at process startup.
+# None means "not yet configured" — fall back to env lookup.
+_active_mode: "InstrumentMode | None" = None
+
+
+def _mode() -> "InstrumentMode":
+    return _active_mode if _active_mode is not None else get_instrument_mode()
+
 
 class InstrumentMode(str, Enum):
     """Supported daemon instrumentation modes."""
@@ -72,7 +80,9 @@ def _make_handler(stream: Any, mode: InstrumentMode, log_level: str) -> logging.
 
 def configure_daemon_logging(log_level: str, log_file: str | None = None) -> InstrumentMode:
     """Configure root daemon logging and return the selected instrumentation mode."""
+    global _active_mode
     mode = get_instrument_mode()
+    _active_mode = mode
     effective_level = "WARNING" if mode is InstrumentMode.OFF else log_level
 
     root_logger = logging.getLogger()
@@ -107,7 +117,7 @@ def configure_daemon_logging(log_level: str, log_file: str | None = None) -> Ins
 
 def log_event(name: str, message: str | None = None, **attrs: Any) -> None:
     """Emit a structured instrumentation event unless instrumentation is off."""
-    if get_instrument_mode() is InstrumentMode.OFF:
+    if _mode() is InstrumentMode.OFF:
         return
 
     logging.getLogger(__name__).info(
@@ -130,12 +140,13 @@ class timing_event:
 
     def __enter__(self) -> "timing_event":
         """Start timing."""
-        self.started = time.perf_counter()
+        if _mode() in {InstrumentMode.TRACE, InstrumentMode.REMOTE}:
+            self.started = time.perf_counter()
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
         """Emit a completed timing event when trace mode is active."""
-        if get_instrument_mode() not in {InstrumentMode.TRACE, InstrumentMode.REMOTE}:
+        if _mode() not in {InstrumentMode.TRACE, InstrumentMode.REMOTE}:
             return
         attrs = dict(self.attrs)
         attrs["duration_ms"] = round((time.perf_counter() - self.started) * 1000, 3)

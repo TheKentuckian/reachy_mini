@@ -11,6 +11,7 @@ import argparse
 import asyncio
 import logging
 import sys
+import time
 import types
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -40,7 +41,11 @@ from reachy_mini.daemon.app.routers import (
     volume,
 )
 from reachy_mini.daemon.daemon import Daemon
-from reachy_mini.daemon.instrumentation import configure_daemon_logging, timing_event
+from reachy_mini.daemon.instrumentation import (
+    configure_daemon_logging,
+    log_event,
+    timing_event,
+)
 from reachy_mini.daemon.systemd import SystemdNotifier
 from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.io.protocol import DaemonState
@@ -218,9 +223,10 @@ def create_app(
             except Exception as e:
                 logger.exception(f"Error stopping daemon: {e}")
 
-    app = FastAPI(
-        lifespan=lifespan,
-    )
+    with timing_event("daemon.create_app.fastapi"):
+        app = FastAPI(
+            lifespan=lifespan,
+        )
 
     app.state.args = args
     sim_mode = (
@@ -230,44 +236,77 @@ def create_app(
         if args.mockup_sim
         else SimulationMode.NONE
     )
-    app.state.daemon = Daemon(
-        robot_name=args.robot_name,
+    with timing_event(
+        "daemon.create_app.daemon_construct",
         wireless_version=args.wireless_version,
-        desktop_app_daemon=args.desktop_app_daemon,
-        log_level=args.log_level,
         no_media=args.no_media,
-        sim_mode=sim_mode,
-    )
-    app.state.app_manager = AppManager(
+        sim_mode=sim_mode.value,
+    ):
+        app.state.daemon = Daemon(
+            robot_name=args.robot_name,
+            wireless_version=args.wireless_version,
+            desktop_app_daemon=args.desktop_app_daemon,
+            log_level=args.log_level,
+            no_media=args.no_media,
+            sim_mode=sim_mode,
+        )
+    with timing_event(
+        "daemon.create_app.app_manager_construct",
         wireless_version=args.wireless_version,
         desktop_app_daemon=args.desktop_app_daemon,
-        daemon=app.state.daemon,
-    )
+    ):
+        app.state.app_manager = AppManager(
+            wireless_version=args.wireless_version,
+            desktop_app_daemon=args.desktop_app_daemon,
+            daemon=app.state.daemon,
+        )
 
-    router = APIRouter(prefix="/api")
-    router.include_router(apps.router)
-    #router.include_router(autostart.router)
-    router.include_router(camera.router)
-    router.include_router(daemon.router)
-    router.include_router(hf_auth.router)
-    router.include_router(kinematics.router)
-    router.include_router(media.router)
-    router.include_router(motors.router)
-    router.include_router(move.router)
-    router.include_router(state.router)
-    router.include_router(volume.router)
+    with timing_event("daemon.create_app.api_router_construct"):
+        router = APIRouter(prefix="/api")
+
+    api_routers = (
+        ("apps", apps.router),
+        ("camera", camera.router),
+        ("daemon", daemon.router),
+        ("hf_auth", hf_auth.router),
+        ("kinematics", kinematics.router),
+        ("media", media.router),
+        ("motors", motors.router),
+        ("move", move.router),
+        ("state", state.router),
+        ("volume", volume.router),
+    )
+    with timing_event("daemon.create_app.api_router_includes", count=len(api_routers)):
+        for _, api_router in api_routers:
+            router.include_router(api_router)
 
     if args.wireless_version:
-        from .routers import autostart, cache, update, wifi_config
+        with timing_event("daemon.create_app.wireless_router_imports"):
+            from .routers import autostart, cache, update, wifi_config
 
-        app.include_router(autostart.router)
-        app.include_router(cache.router)
-        app.include_router(logs.router)
-        app.include_router(update.router)
-        app.include_router(wifi_config.router)
+        wireless_routers = (
+            ("autostart", autostart.router),
+            ("cache", cache.router),
+            ("logs", logs.router),
+            ("update", update.router),
+            ("wifi_config", wifi_config.router),
+        )
+        with timing_event(
+            "daemon.create_app.wireless_router_includes",
+            count=len(wireless_routers),
+        ):
+            for _, wireless_router in wireless_routers:
+                app.include_router(wireless_router)
+        with timing_event("daemon.create_app.wifi_startup_schedule"):
+            wifi_config.start_wifi_init_on_startup()
 
-    app.include_router(router)
-    app.include_router(sdk_ws.router)
+    app_routers = (
+        ("api", router),
+        ("sdk_ws", sdk_ws.router),
+    )
+    with timing_event("daemon.create_app.app_router_includes", count=len(app_routers)):
+        for _, app_router in app_routers:
+            app.include_router(app_router)
 
     if health_check_event is not None:
 
@@ -287,8 +326,9 @@ def create_app(
     STATIC_DIR = Path(__file__).parent / "dashboard" / "static"
     TEMPLATES_DIR = Path(__file__).parent / "dashboard" / "templates"
 
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    with timing_event("daemon.create_app.static_mounts"):
+        app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+        templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
     @app.get("/")
     async def dashboard(request: Request) -> HTMLResponse:
@@ -378,7 +418,8 @@ def run_app(args: Args) -> None:
         loop.set_exception_handler(asyncio_exception_handler)
 
         health_check_event = asyncio.Event()
-        app = create_app(args, health_check_event, systemd_notifier)
+        with timing_event("daemon.create_app"):
+            app = create_app(args, health_check_event, systemd_notifier)
 
         config = uvicorn.Config(
             app,
@@ -409,10 +450,16 @@ def run_app(args: Args) -> None:
                     break
 
         try:
+            _t_serve_start = time.perf_counter()
+
             async def notify_when_serving() -> None:
                 while not server.started and not server.should_exit:
                     await asyncio.sleep(0.05)
                 if server.started:
+                    log_event(
+                        "daemon.uvicorn.startup",
+                        duration_ms=round((time.perf_counter() - _t_serve_start) * 1000, 3),
+                    )
                     daemon_status = app.state.daemon.status()
                     if args.autostart and daemon_status.state != DaemonState.RUNNING:
                         systemd_notifier.status(
@@ -658,33 +705,36 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Configure logging early so wireless-check spans reach the log file.
+    # run_app() calls this again with the same args — idempotent.
+    configure_daemon_logging(args.log_level, args.log_file)
+    log_event("daemon.main.start", wireless_version=args.wireless_version)
+
     if args.wireless_version:
         SystemdNotifier.from_environment().status("Running wireless startup checks")
-        # Check and fix ownership of /venvs directory
-        check_and_fix_venvs_ownership(custom_logger=logging.getLogger())
-
-        # Check and update bluetooth service if needed
-        check_and_update_bluetooth_service()
-
-        # Check and update wireless launcher if needed
-        check_and_update_wireless_launcher()
-
-        # Check and sync apps_venv SDK version with daemon
-        check_and_sync_apps_venv_sdk()
-
-        # Check and fix restore venv if it has legacy editable install
-        check_and_fix_restore_venv()
-
-        if check_reachymini_asoundrc():
-            logging.getLogger().info(
-                "~/.asoundrc correctly configured for Reachy Mini Audio."
-            )
-        else:
-            logging.getLogger().warning(
-                "~/.asoundrc not found or not correctly configured for Reachy Mini Audio. "
-                "Creating a new one."
-            )
-            write_asoundrc_to_home()
+        with timing_event("daemon.wireless_checks.venvs_ownership"):
+            check_and_fix_venvs_ownership(custom_logger=logging.getLogger())
+        with timing_event("daemon.wireless_checks.bluetooth_service"):
+            check_and_update_bluetooth_service()
+        with timing_event("daemon.wireless_checks.wireless_launcher"):
+            check_and_update_wireless_launcher()
+        with timing_event("daemon.wireless_checks.apps_venv_sdk"):
+            check_and_sync_apps_venv_sdk()
+        with timing_event("daemon.wireless_checks.restore_venv"):
+            check_and_fix_restore_venv()
+        with timing_event("daemon.wireless_checks.asoundrc") as te:
+            configured = check_reachymini_asoundrc()
+            te.attrs["configured"] = configured
+            if configured:
+                logging.getLogger().info(
+                    "~/.asoundrc correctly configured for Reachy Mini Audio."
+                )
+            else:
+                logging.getLogger().warning(
+                    "~/.asoundrc not found or not correctly configured for Reachy Mini Audio. "
+                    "Creating a new one."
+                )
+                write_asoundrc_to_home()
 
     run_app(Args(**vars(args)))
 
