@@ -12,13 +12,22 @@ import numpy as np
 import psutil
 from pydantic import BaseModel
 
-from reachy_mini.daemon.backend.robot import RobotBackend
-
 from . import AppInfo, SourceKind
-from .sources import hf_space, local_common_venv
 
 if TYPE_CHECKING:
     from reachy_mini.daemon.daemon import Daemon
+
+
+def _hf_space():
+    from .sources import hf_space
+
+    return hf_space
+
+
+def _local_common_venv():
+    from .sources import local_common_venv
+
+    return local_common_venv
 
 
 class AppState(str, Enum):
@@ -115,6 +124,7 @@ class AppManager:
             await self.daemon.robot_app_lock.acquire_local_evicting_remote(app_name)
 
         # Get module name and Python path for subprocess execution
+        local_common_venv = _local_common_venv()
         module_name = local_common_venv.get_app_module(
             app_name, self.wireless_version, self.desktop_app_daemon
         )
@@ -299,6 +309,8 @@ class AppManager:
 
         # Return robot to zero position after app stops
         if self.daemon is not None and self.daemon.backend is not None:
+            from reachy_mini.daemon.backend.robot import RobotBackend
+
             if isinstance(self.daemon.backend, RobotBackend):
                 self.daemon.backend.enable_motors()
 
@@ -373,10 +385,13 @@ class AppManager:
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
         """List available apps for given source kind."""
         if source == SourceKind.HF_SPACE:
+            hf_space = _hf_space()
             return await hf_space.list_all_apps()
         elif source == SourceKind.DASHBOARD_SELECTION:
+            hf_space = _hf_space()
             return await hf_space.list_available_apps()
         elif source == SourceKind.INSTALLED:
+            local_common_venv = _local_common_venv()
             return await local_common_venv.list_available_apps(
                 wireless_version=self.wireless_version,
                 desktop_app_daemon=self.desktop_app_daemon,
@@ -388,6 +403,7 @@ class AppManager:
 
     async def install_new_app(self, app: AppInfo, logger: logging.Logger) -> None:
         """Install a new app by name."""
+        local_common_venv = _local_common_venv()
         success = await local_common_venv.install_package(
             app,
             logger,
@@ -399,6 +415,7 @@ class AppManager:
 
     async def remove_app(self, app_name: str, logger: logging.Logger) -> None:
         """Remove an installed app by name."""
+        local_common_venv = _local_common_venv()
         success = await local_common_venv.uninstall_package(
             app_name,
             logger,
@@ -439,6 +456,7 @@ class AppManager:
         )
 
         # Fall back to stored metadata
+        local_common_venv = _local_common_venv()
         metadata = local_common_venv._load_app_metadata(app_name)
 
         space_id: str | None = None

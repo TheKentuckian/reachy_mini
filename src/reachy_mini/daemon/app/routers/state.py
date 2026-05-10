@@ -5,15 +5,19 @@ This exposes:
 - full state and streaming state updates
 """
 
+from __future__ import annotations
+
 import asyncio
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend, ws_get_backend
 from ..models import AnyPose, DoAInfo, FullState, as_any_pose
+
+if TYPE_CHECKING:
+    from ....daemon.backend.abstract import Backend
 
 router = APIRouter(prefix="/state")
 

@@ -5,13 +5,17 @@ subsystem of the robot. It provides endpoints for retrieving URDF representation
 and other kinematics-related information.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
-from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend
+
+if TYPE_CHECKING:
+    from ....daemon.backend.abstract import Backend
 
 router = APIRouter(
     prefix="/kinematics",

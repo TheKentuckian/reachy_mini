@@ -7,9 +7,11 @@ This exposes:
 - set_target and streaming set_target
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
-from typing import Any, Coroutine
+from typing import TYPE_CHECKING, Any, Coroutine
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -21,9 +23,11 @@ from reachy_mini.daemon.instrumentation import log_event, timing_event
 from reachy_mini.motion.recorded_move import RecordedMoves
 from reachy_mini.utils.interpolation import InterpolationTechnique
 
-from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend, ws_get_backend
 from ..models import AnyPose, FullBodyTarget
+
+if TYPE_CHECKING:
+    from ....daemon.backend.abstract import Backend
 
 move_tasks: dict[UUID, asyncio.Task[None]] = {}
 move_listeners: list[WebSocket] = []

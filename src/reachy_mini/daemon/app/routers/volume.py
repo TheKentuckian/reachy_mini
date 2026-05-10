@@ -7,16 +7,21 @@ This exposes:
 - play test sound (optional)
 """
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from reachy_mini.daemon.app.dependencies import get_backend
-from reachy_mini.daemon.backend.abstract import Backend
 
 from .volume_control import VolumeControl, get_volume_control
+
+if TYPE_CHECKING:
+    from reachy_mini.daemon.backend.abstract import Backend
 
 router = APIRouter(prefix="/volume")
 logger = logging.getLogger(__name__)

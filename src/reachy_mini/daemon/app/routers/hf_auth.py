@@ -9,8 +9,6 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from reachy_mini.apps.sources import hf_auth
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hf-auth")
@@ -38,6 +36,12 @@ class TokenResponse(BaseModel):
     message: str | None = None
 
 
+def _hf_auth():
+    from reachy_mini.apps.sources import hf_auth
+
+    return hf_auth
+
+
 # =============================================================================
 # Token-based Authentication (Manual)
 # =============================================================================
@@ -46,6 +50,7 @@ class TokenResponse(BaseModel):
 @router.post("/save-token")
 async def save_token(request: TokenRequest) -> TokenResponse:
     """Save HuggingFace token after validation."""
+    hf_auth = _hf_auth()
     result = hf_auth.save_hf_token(request.token)
 
     if result["status"] == "error":
@@ -62,6 +67,7 @@ async def save_token(request: TokenRequest) -> TokenResponse:
 @router.get("/status")
 async def get_auth_status() -> dict[str, Any]:
     """Check if user is authenticated with HuggingFace."""
+    hf_auth = _hf_auth()
     return hf_auth.check_token_status()
 
 
@@ -92,6 +98,7 @@ async def get_relay_status(request: Request) -> dict[str, Any]:
 @router.delete("/token")
 async def delete_token() -> dict[str, str]:
     """Delete stored HuggingFace token."""
+    hf_auth = _hf_auth()
     success = hf_auth.delete_hf_token()
 
     if not success:
@@ -117,6 +124,7 @@ async def get_central_robot_status() -> dict[str, Any]:
       - central server is unreachable / returned an error
     Callers should treat `available: false` as "unknown, don't block".
     """
+    hf_auth = _hf_auth()
     token = hf_auth.get_hf_token()
     if not token:
         return {"available": False, "robots": [], "reason": "not_authenticated"}
@@ -169,6 +177,7 @@ async def get_central_robot_status() -> dict[str, Any]:
 @router.get("/oauth/configured")
 async def is_oauth_configured() -> dict[str, Any]:
     """Check if OAuth is configured."""
+    hf_auth = _hf_auth()
     return {
         "configured": hf_auth.is_oauth_configured(),
     }
@@ -197,6 +206,7 @@ async def start_oauth(
         host = request.headers.get("host", "")
         wireless_version = "reachy-mini.local" in host
 
+    hf_auth = _hf_auth()
     result = hf_auth.create_oauth_session(
         wireless_version=wireless_version,
         use_localhost=use_localhost,
@@ -215,12 +225,14 @@ async def get_oauth_status(session_id: str) -> dict[str, Any]:
     The frontend polls this endpoint to check if the user has
     completed authorization.
     """
+    hf_auth = _hf_auth()
     return hf_auth.get_oauth_session_status(session_id)
 
 
 @router.delete("/oauth/session/{session_id}")
 async def cancel_oauth_session(session_id: str) -> dict[str, str]:
     """Cancel an OAuth session."""
+    hf_auth = _hf_auth()
     if hf_auth.cancel_oauth_session(session_id):
         return {"status": "success"}
     raise HTTPException(status_code=404, detail="Session not found")
@@ -240,6 +252,7 @@ async def oauth_callback(
     Shows a success/error page that the user can close.
     """
     if error:
+        hf_auth = _hf_auth()
         # OAuth error from HF
         session = hf_auth.get_session_by_state(state) if state else None
         if session:
@@ -267,6 +280,7 @@ async def oauth_callback(
     wireless_version = "reachy-mini.local" in host
 
     # Exchange code for token
+    hf_auth = _hf_auth()
     result = await hf_auth.exchange_code_for_token(
         code=code,
         state=state,

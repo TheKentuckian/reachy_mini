@@ -10,7 +10,7 @@ import logging
 import time
 from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from reachy_mini.daemon.instrumentation import log_event, timing_event
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
@@ -21,11 +21,11 @@ from reachy_mini.daemon.utils import (
 )
 from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
-from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
-from .backend.mockup_sim import MockupSimBackend
-from .backend.mujoco import MujocoBackend
-from .backend.robot import RobotBackend
+if TYPE_CHECKING:
+    from .backend.mockup_sim import MockupSimBackend
+    from .backend.mujoco import MujocoBackend
+    from .backend.robot import RobotBackend
 
 # Central signaling relay for WebRTC (optional)
 _central_relay_task: Optional[asyncio.Task[Any]] = None
@@ -671,6 +671,8 @@ class Daemon:
         reflash_motors_on_start: bool = True,
     ) -> "RobotBackend | MujocoBackend | MockupSimBackend":
         if mockup_sim:
+            from .backend.mockup_sim import MockupSimBackend
+
             with timing_event("daemon.backend.construct", backend_mode="mockup"):
                 return MockupSimBackend(
                     check_collision=check_collision,
@@ -678,6 +680,8 @@ class Daemon:
                     use_audio=use_audio,
                 )
         elif sim:
+            from .backend.mujoco import MujocoBackend
+
             with timing_event("daemon.backend.construct", backend_mode="mujoco"):
                 return MujocoBackend(
                     scene=scene,
@@ -711,8 +715,12 @@ class Daemon:
             )
 
             if reflash_motors_on_start:
+                from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
+
                 with timing_event("daemon.motors.reflash_check"):
                     reflash_motors_if_needed(serialport, dont_light_up=True)
+
+            from .backend.robot import RobotBackend
 
             with timing_event("daemon.backend.construct", backend_mode="robot"):
                 return RobotBackend(
