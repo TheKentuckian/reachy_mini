@@ -11,4 +11,4 @@ sudo rfkill unblock wifi
 
 # Run Python in unbuffered mode (-u) to ensure logs are immediately forwarded to systemd.
 # exec makes Python the systemd main process for Type=notify and watchdog heartbeats.
-exec python -u -m reachy_mini.daemon.app.main --wireless-version --no-wake-up-on-start --log-file /tmp/daemon.jsonl
+exec python -u -m reachy_mini.daemon.app.main --wireless-version --log-file /tmp/daemon.jsonl
