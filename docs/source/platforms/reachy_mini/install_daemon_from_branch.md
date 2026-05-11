@@ -54,6 +54,52 @@
 
 Now you can modify the code in `~/reachy_mini` and test your changes without affecting the system installation.
 
+## Option A2: Editable Install into the System Venv
+
+> [!NOTE]
+> Same fast-iteration workflow as Option A — edit the clone, restart the daemon, see changes immediately — but without duplicating the ~1 GB of dependencies (numpy, scipy, placo, gstreamer bindings, …) that already live in `/venvs/mini_daemon`. The trade-off is that this mutates the system daemon venv, so testing changes the production install until you roll back.
+>
+> Prefer this over Option A when storage or SD-card wear matters; prefer Option A when you want a fully isolated environment.
+
+### Steps:
+
+1. **Connect to the robot via SSH:**
+   ```bash
+   ssh pollen@reachy-mini.local
+   # Password: root
+   ```
+
+2. **Stop the system daemon service:**
+   ```bash
+   sudo systemctl stop reachy-mini-daemon
+   ```
+
+3. **Clone the Reachy Mini repository with the specific branch:**
+   ```bash
+   git clone -b <branch-name> https://github.com/pollen-robotics/reachy_mini.git
+   cd reachy_mini
+   ```
+
+4. **Editable-install the clone into the system venv:**
+   ```bash
+   source /venvs/mini_daemon/bin/activate
+   uv pip install -e ".[gstreamer,wireless-version]"
+   ```
+   `reachy_mini` in `/venvs/mini_daemon` now points at your clone — edits are picked up without a reinstall.
+
+5. **Run the daemon:**
+   ```bash
+   # Foreground, for fast iteration:
+   reachy-mini-daemon --wireless-version
+   # …or through systemd, for end-to-end testing:
+   sudo systemctl start reachy-mini-daemon
+   ```
+
+6. **Roll back when you're done:** see [Rolling Back to Factory Version](#rolling-back-to-factory-version). The editable install is removed by reinstalling the released wheel into the same venv, or by triggering SOFTWARE_RESET.
+
+> [!WARNING]
+> The `gpio-shutdown-daemon` service also runs out of this venv. If your branch changes anything under `src/reachy_mini/daemon/app/services/gpio_shutdown/`, also run `sudo systemctl restart gpio-shutdown-daemon` after the editable install.
+
 ## Option B: System-Wide Custom Installation
 
 > [!NOTE]

@@ -10,6 +10,7 @@ managing the robot's state.
 import argparse
 import asyncio
 import logging
+import signal
 import sys
 import time
 import types
@@ -223,8 +224,15 @@ def create_app(
 
             try:
                 logger.info("Shutting down daemon...")
+                # SIGUSR1 from the GPIO shutdown daemon (power-button release)
+                # forces goto_sleep regardless of the CLI flag, so a user-set
+                # --no-goto-sleep-on-stop never causes a head-drop on the
+                # consumer power-button path. The flag remains honored for
+                # other shutdown triggers (systemctl stop, Ctrl-C, etc.).
+                force_safe = getattr(app.state, "force_safe_shutdown", False)
+                goto_sleep = True if force_safe else args.goto_sleep_on_stop
                 await app.state.daemon.stop(
-                    goto_sleep_on_stop=args.goto_sleep_on_stop,
+                    goto_sleep_on_stop=goto_sleep,
                 )
             except Exception as e:
                 logger.exception(f"Error stopping daemon: {e}")
@@ -432,6 +440,36 @@ def run_app(args: Args) -> None:
         )
         server = uvicorn.Server(config)
 
+        # uvicorn installs its own SIGINT/SIGTERM handlers once server.serve()
+        # starts running; this covers the gap before that, so a SIGTERM during
+        # daemon startup still produces a graceful exit (lifespan finally runs
+        # daemon.stop(goto_sleep_on_stop=True), moving the head to a safe pose
+        # before motor power is cut).
+        def _request_graceful_shutdown() -> None:
+            if not server.should_exit:
+                logger.info("Received SIGTERM, requesting graceful shutdown.")
+                server.should_exit = True
+
+        # SIGUSR1: "force safe shutdown" — used by the GPIO shutdown daemon
+        # on power-button release. Overrides --no-goto-sleep-on-stop so the
+        # head always reaches the sleep pose before motor power is cut.
+        def _request_safe_shutdown() -> None:
+            if not getattr(app.state, "force_safe_shutdown", False):
+                logger.info(
+                    "Received SIGUSR1, forcing safe shutdown (goto_sleep_on_stop=True)."
+                )
+                app.state.force_safe_shutdown = True
+            if not server.should_exit:
+                server.should_exit = True
+
+        try:
+            loop.add_signal_handler(signal.SIGTERM, _request_graceful_shutdown)
+            loop.add_signal_handler(signal.SIGUSR1, _request_safe_shutdown)
+        except NotImplementedError:
+            # add_signal_handler is POSIX-only; fall back to signal.signal.
+            signal.signal(signal.SIGTERM, lambda *_: _request_graceful_shutdown())
+            signal.signal(signal.SIGUSR1, lambda *_: _request_safe_shutdown())
+
         health_check_task = None
         readiness_task: asyncio.Task[None] | None = None
         watchdog_task: asyncio.Task[None] | None = None
@@ -461,7 +499,9 @@ def run_app(args: Args) -> None:
                 if server.started:
                     log_event(
                         "daemon.uvicorn.startup",
-                        duration_ms=round((time.perf_counter() - _t_serve_start) * 1000, 3),
+                        duration_ms=round(
+                            (time.perf_counter() - _t_serve_start) * 1000, 3
+                        ),
                     )
                     daemon_status = app.state.daemon.status()
                     if args.autostart and daemon_status.state != DaemonState.RUNNING:
