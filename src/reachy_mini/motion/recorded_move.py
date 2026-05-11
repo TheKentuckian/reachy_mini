@@ -8,9 +8,6 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import numpy.typing as npt
-from huggingface_hub import snapshot_download
-from huggingface_hub.errors import LocalEntryNotFoundError
-
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import linear_pose_interpolation
 
@@ -37,6 +34,8 @@ def preload_dataset(dataset_name: str) -> str | None:
 
     """
     try:
+        from huggingface_hub import snapshot_download
+
         logger.info(f"Pre-downloading dataset: {dataset_name}")
         local_path: str = snapshot_download(dataset_name, repo_type="dataset")
         logger.info(f"Dataset {dataset_name} cached at: {local_path}")
@@ -166,6 +165,9 @@ class RecordedMoves:
         self.hf_dataset_name = hf_dataset_name
         # Try local cache first (instant, no network)
         try:
+            from huggingface_hub import snapshot_download
+            from huggingface_hub.errors import LocalEntryNotFoundError
+
             self.local_path = snapshot_download(
                 self.hf_dataset_name,
                 repo_type="dataset",
@@ -177,6 +179,8 @@ class RecordedMoves:
                 f"Dataset {hf_dataset_name} not in cache, downloading from HuggingFace. "
                 "This may take a moment. Consider pre-loading datasets at daemon startup."
             )
+            from huggingface_hub import snapshot_download
+
             self.local_path = snapshot_download(
                 self.hf_dataset_name,
                 repo_type="dataset",

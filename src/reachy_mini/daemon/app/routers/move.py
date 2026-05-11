@@ -16,7 +16,6 @@ from uuid import UUID, uuid4
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from huggingface_hub.errors import RepositoryNotFoundError
 from pydantic import BaseModel
 
 from reachy_mini.daemon.instrumentation import log_event, timing_event
@@ -194,6 +193,8 @@ async def list_recorded_move_dataset(
 ) -> list[str]:
     """List available recorded moves in a dataset."""
     try:
+        from huggingface_hub.errors import RepositoryNotFoundError
+
         moves = RecordedMoves(dataset_name)
     except RepositoryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -209,6 +210,8 @@ async def play_recorded_move_dataset(
 ) -> MoveUUID:
     """Request the robot to play a predefined recorded move from a dataset."""
     try:
+        from huggingface_hub.errors import RepositoryNotFoundError
+
         recorded_moves = RecordedMoves(dataset_name)
     except RepositoryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

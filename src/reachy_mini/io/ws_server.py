@@ -12,16 +12,19 @@ Server->Client messages are Pydantic models serialized to JSON, e.g.:
     {"type": "task_progress", "uuid": "...", "finished": true, ...}
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import threading
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
-from reachy_mini.daemon.backend.abstract import Backend
+if TYPE_CHECKING:
+    from reachy_mini.daemon.backend.abstract import Backend
 from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.io.protocol import (
     AnyCommand,

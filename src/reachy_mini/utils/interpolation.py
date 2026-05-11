@@ -5,7 +5,6 @@ from typing import Callable, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
-from scipy.spatial.transform import Rotation as R
 
 InterpolationFunc = Callable[[float], npt.NDArray[np.float64]]
 
@@ -59,6 +58,8 @@ def linear_pose_interpolation(
     start_pose: npt.NDArray[np.float64], target_pose: npt.NDArray[np.float64], t: float
 ) -> npt.NDArray[np.float64]:
     """Linearly interpolate between two poses in 6D space."""
+    from scipy.spatial.transform import Rotation as R
+
     # Extract rotations
     rot_start = R.from_matrix(start_pose[:3, :3])
     rot_end = R.from_matrix(target_pose[:3, :3])

@@ -6,7 +6,6 @@ from typing import cast
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.io.protocol import MotorControlMode
 
@@ -80,6 +79,8 @@ class XYZRPYPose(BaseModel):
         """Create an XYZRPYPose representation from a 4x4 pose array."""
         assert arr.shape == (4, 4), "Array must be of shape (4, 4)"
 
+        from scipy.spatial.transform import Rotation as R
+
         x, y, z = arr[0, 3], arr[1, 3], arr[2, 3]
         roll, pitch, yaw = R.from_matrix(arr[:3, :3]).as_euler("xyz")
 
@@ -94,6 +95,8 @@ class XYZRPYPose(BaseModel):
 
     def to_pose_array(self) -> NDArray[np.float64]:
         """Convert the XYZRPYPose to a 4x4 numpy array."""
+        from scipy.spatial.transform import Rotation as R
+
         rotation = R.from_euler("xyz", [self.roll, self.pitch, self.yaw])
         pose_matrix = np.eye(4)
         pose_matrix[:3, 3] = [self.x, self.y, self.z]

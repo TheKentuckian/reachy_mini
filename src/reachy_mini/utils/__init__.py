@@ -7,7 +7,6 @@ checking if the Reachy Mini daemon is running, and performing linear pose interp
 
 import numpy as np
 import numpy.typing as npt
-from scipy.spatial.transform import Rotation as R
 
 
 def create_head_pose(
@@ -36,6 +35,8 @@ def create_head_pose(
         np.ndarray: A 4x4 homogeneous transformation matrix representing the pose.
 
     """
+    from scipy.spatial.transform import Rotation as R
+
     pose = np.eye(4)
     rot = R.from_euler("xyz", [roll, pitch, yaw], degrees=degrees).as_matrix()
     pose[:3, :3] = rot

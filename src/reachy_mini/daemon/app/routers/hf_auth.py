@@ -4,7 +4,6 @@ import asyncio
 import logging
 from typing import Any
 
-import aiohttp
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -19,9 +18,6 @@ router = APIRouter(prefix="/hf-auth")
 CENTRAL_ROBOT_STATUS_URL = (
     "https://cduss-reachy-mini-central.hf.space/api/robot-status"
 )
-CENTRAL_ROBOT_STATUS_TIMEOUT = aiohttp.ClientTimeout(total=5)
-
-
 class TokenRequest(BaseModel):
     """Request model for saving a HuggingFace token."""
 
@@ -129,8 +125,10 @@ async def get_central_robot_status() -> dict[str, Any]:
     if not token:
         return {"available": False, "robots": [], "reason": "not_authenticated"}
 
+    import aiohttp
+
     try:
-        async with aiohttp.ClientSession(timeout=CENTRAL_ROBOT_STATUS_TIMEOUT) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
             # Token goes in the Authorization header, not the URL —
             # otherwise it leaks into central's access logs and any
             # intermediate proxy's logs. The desktop frontend already
