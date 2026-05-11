@@ -129,6 +129,8 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 
 ## Live/Web/JS Apps
 
+> **Fork note (TheKentuckian/reachy_mini):** The HuggingFace central signaling relay is **disabled by default** in this fork. JS apps — and Pollen's remote-view Space — require it. To re-enable, add `--central-relay` to the launch command in `src/reachy_mini/daemon/app/services/wireless/launcher.sh` and restart the daemon service. See the "Central Signaling Relay" note in `agents.local.md` for the exact diff and `systemctl` commands.
+
 > ## START HERE: clone `webrtc_example` and modify it.
 >
 > **Live Space (run it, read the source):** https://huggingface.co/spaces/cduss/webrtc_example
@@ -304,6 +306,7 @@ Rule of thumb: for UI-heavy iteration (CSS, slider behaviour, state machine wiri
 | Head doesn't move, session *is* streaming | Robot is asleep (torque off). Call `await robot.ensureAwake()` after `startSession()`. |
 | Audio stays silent after `setAudioMuted(false)` | Browser requires unmute inside a user-gesture handler. |
 | `sessionRejected` | Robot is locked by another app. Surface `e.detail.activeApp` in the UI. |
+| JS app can't discover robot / no robot in picker | Central relay is disabled (default in this fork). Add `--central-relay` to `launcher.sh` and restart the daemon. |
 | Stream laggy | See buffer-lag overlay in `webrtc_example/index.html`; > 500 ms jitter = network issue. |
 | UI broken on phone | Hardcoded pixel widths or desktop-only layout. Use the `webrtc_example` viewport meta + fluid units; test in Chrome devtools phone emulation. |
 | Volume slider floods the data channel | Wire `setVolume` on the slider's `'change'` event (release) — not `'input'` (per-pixel). Sync once on streaming-start with `await robot.getVolume()` to reflect the robot's real level, then reflect the value that `setVolume` resolves with back into the slider. |
