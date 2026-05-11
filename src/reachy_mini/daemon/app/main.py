@@ -51,7 +51,7 @@ from reachy_mini.daemon.instrumentation import (
 )
 from reachy_mini.daemon.systemd import SystemdNotifier
 from reachy_mini.daemon.utils import SimulationMode
-from reachy_mini.io.protocol import DaemonState
+from reachy_mini.io.protocol import DaemonState, MotorControlMode
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
     write_asoundrc_to_home,
@@ -178,33 +178,47 @@ def create_app(
                 logger.info("Antenna sleep gesture disabled via REACHY_ANTENNA_SLEEP=0")
                 return
 
-            async def _start_autostart_app() -> None:
-                cfg_path = Path("/etc/reachy-mini/autostart.json")
-                if not cfg_path.exists():
-                    return
+            _AUTOSTART_UNIT = "reachy-app-autostart.service"
+
+            async def _autostart_service_active() -> bool:
+                """Return True if the autostart systemd service is currently running."""
                 try:
-                    cfg = json.loads(cfg_path.read_text())
-                except Exception:
-                    logger.warning("Could not read autostart config", exc_info=True)
-                    return
-                if not cfg.get("app_autostart_enabled"):
-                    return
-                module = cfg.get("app_module")
-                if not module or not isinstance(module, str):
-                    return
-                app_args = [str(a) for a in (cfg.get("app_args") or [])]
-                logger.info(f"Antenna wake gesture: starting autostart app {module!r}")
-                try:
-                    await asyncio.create_subprocess_exec(
-                        "/venvs/apps_venv/bin/python",
-                        "-u", "-m", module,
-                        *app_args,
+                    proc = await asyncio.create_subprocess_exec(
+                        "systemctl", "is-active", "--quiet", _AUTOSTART_UNIT,
                     )
+                    await proc.wait()
+                    return proc.returncode == 0
                 except Exception:
-                    logger.warning("Failed to spawn autostart app after wake gesture", exc_info=True)
+                    return False
+
+            async def _start_autostart_app() -> None:
+                """Start the autostart app via systemctl so only one managed instance runs."""
+                logger.info(f"Antenna wake gesture: starting {_AUTOSTART_UNIT}")
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        "systemctl", "start", _AUTOSTART_UNIT,
+                    )
+                    await proc.wait()
+                    if proc.returncode != 0:
+                        logger.warning(f"systemctl start {_AUTOSTART_UNIT} returned {proc.returncode}")
+                except Exception:
+                    logger.warning("Failed to start autostart service after wake gesture", exc_info=True)
+
+            async def _stop_autostart_app() -> None:
+                """Stop the autostart service, covering apps launched outside the app_manager."""
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        "systemctl", "stop", _AUTOSTART_UNIT,
+                    )
+                    await proc.wait()
+                except Exception:
+                    logger.warning("Failed to stop autostart service", exc_info=True)
 
             awake = True
             held_since: float | None = None
+            last_debug_log_t: float = 0.0
+            _service_active_cache: bool = False
+            _service_active_last_checked: float = -999.0
             logger.info("Antenna sleep monitor started")
 
             while True:
@@ -221,29 +235,56 @@ def create_app(
                     left, right = float(positions[0]), float(positions[1])
                     now = asyncio.get_event_loop().time()
 
+                    # Refresh service-active cache at most once per second.
+                    if now - _service_active_last_checked >= 1.0:
+                        _service_active_cache = await _autostart_service_active()
+                        _service_active_last_checked = now
+
                     if awake:
-                        # Sleep gesture: both antennas squeezed inward from neutral
-                        if left < -_ANTENNA_SLEEP_THRESHOLD and right > _ANTENNA_SLEEP_THRESHOLD:
-                            if held_since is None:
-                                held_since = now
-                            elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
-                                held_since = None
-                                logger.info("Antenna sleep gesture — stopping app and going to sleep")
-                                try:
-                                    await app.state.app_manager.stop_current_app()
-                                except Exception:
-                                    logger.warning("Error stopping app during antenna sleep gesture", exc_info=True)
-                                try:
-                                    await backend.goto_sleep()
-                                except Exception:
-                                    logger.warning("Error in goto_sleep during antenna gesture", exc_info=True)
-                                awake = False
-                        else:
+                        # Sync: if motors were disabled externally (e.g. app called goto_sleep),
+                        # immediately enter sleeping state rather than waiting for antenna droop.
+                        if backend.get_motor_control_mode() == MotorControlMode.Disabled:
+                            logger.info("Motors disabled externally — entering sleeping state")
+                            awake = False
                             held_since = None
+                        elif (
+                            app.state.app_manager.current_app is not None
+                            or _service_active_cache
+                        ):
+                            # App is running and owns the antennas; don't interfere.
+                            held_since = None
+                        else:
+                            # Sleep gesture: both antennas squeezed inward from neutral
+                            if left < -_ANTENNA_SLEEP_THRESHOLD and right > _ANTENNA_SLEEP_THRESHOLD:
+                                if held_since is None:
+                                    held_since = now
+                                elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
+                                    held_since = None
+                                    logger.info("Antenna sleep gesture — stopping app and going to sleep")
+                                    try:
+                                        await app.state.app_manager.stop_current_app()
+                                    except Exception:
+                                        logger.warning("Error stopping app during antenna sleep gesture", exc_info=True)
+                                    await _stop_autostart_app()
+                                    try:
+                                        await backend.goto_sleep()
+                                        backend.set_motor_control_mode(MotorControlMode.Disabled)
+                                    except Exception:
+                                        logger.warning("Error in goto_sleep during antenna gesture", exc_info=True)
+                                    awake = False
+                            else:
+                                held_since = None
                     else:
                         # Wake gesture: both antennas pushed outward from sleep positions
                         wake_l = left > _ANTENNA_LEFT_SLEEP + _ANTENNA_SLEEP_THRESHOLD
                         wake_r = right < _ANTENNA_RIGHT_SLEEP - _ANTENNA_SLEEP_THRESHOLD
+                        if now - last_debug_log_t >= 1.0:
+                            last_debug_log_t = now
+                            logger.info(
+                                f"[sleep-debug] left={left:.3f} right={right:.3f}"
+                                f" | wake_l={wake_l} (need >{_ANTENNA_LEFT_SLEEP + _ANTENNA_SLEEP_THRESHOLD:.2f})"
+                                f" wake_r={wake_r} (need <{_ANTENNA_RIGHT_SLEEP - _ANTENNA_SLEEP_THRESHOLD:.2f})"
+                            )
                         if wake_l and wake_r:
                             if held_since is None:
                                 held_since = now
@@ -251,6 +292,7 @@ def create_app(
                                 held_since = None
                                 logger.info("Antenna wake gesture — waking up")
                                 try:
+                                    backend.set_motor_control_mode(MotorControlMode.Enabled)
                                     await backend.wake_up()
                                 except Exception:
                                     logger.warning("Error in wake_up during antenna gesture", exc_info=True)

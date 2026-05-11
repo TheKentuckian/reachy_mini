@@ -124,7 +124,13 @@ def pressed() -> None:
     call(["sudo", "shutdown", "-h", "now"])
 
 
+# Ignore button state for the first few seconds after boot. On Wireless
+# Reachy Mini the user holds the power button to wake the device; if we
+# start polling before they release it we immediately trigger a shutdown.
+_STARTUP_IGNORE_S = 5.0
 _log("Monitoring GPIO23 for shutdown signal...")
+time.sleep(_STARTUP_IGNORE_S)
+
 while True:
     time.sleep(0.1)
     if shutdown_button.is_pressed:
