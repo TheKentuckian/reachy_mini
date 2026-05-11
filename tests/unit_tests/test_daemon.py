@@ -4,6 +4,7 @@ import threading
 import numpy as np
 import pytest
 import uvicorn
+from fastapi import FastAPI
 
 from reachy_mini.daemon.app.main import Args, create_app
 from reachy_mini.daemon.daemon import Daemon
@@ -47,6 +48,96 @@ async def _stop_app_server(server: uvicorn.Server, thread: threading.Thread) -> 
     """Gracefully shut down the uvicorn server."""
     server.should_exit = True
     thread.join(timeout=10)
+
+
+async def _start_app_server_returning_app(
+    **args_overrides: object,
+) -> tuple[Daemon, uvicorn.Server, threading.Thread, FastAPI]:
+    """Variant of _start_app_server that also returns the FastAPI app.
+
+    Used by lifespan-shutdown tests that need to read/write app.state.
+    """
+    base = dict(
+        sim=True,
+        headless=True,
+        wake_up_on_start=False,
+        no_media=True,
+        autostart=True,
+        fastapi_port=0,
+    )
+    base.update(args_overrides)
+    args = Args(**base)  # type: ignore[arg-type]
+
+    app = create_app(args)
+    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
+    server = uvicorn.Server(config)
+
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    while not server.started:
+        await asyncio.sleep(0.05)
+
+    return app.state.daemon, server, thread, app
+
+
+@pytest.mark.asyncio
+async def test_lifespan_respects_goto_sleep_on_stop_flag() -> None:
+    """Without force_safe_shutdown, lifespan passes args.goto_sleep_on_stop through.
+
+    Baseline for the override test below: SIGTERM / systemctl-stop semantics
+    must keep honoring the CLI flag (so dev iteration with
+    --no-goto-sleep-on-stop still skips the sleep animation).
+    """
+    daemon, server, thread, _app = await _start_app_server_returning_app(
+        goto_sleep_on_stop=False,
+    )
+    original_stop = daemon.stop
+    captured: dict[str, object] = {}
+
+    async def spy_stop(*a: object, **kw: object) -> object:
+        captured.update(kw)
+        # Force fast cleanup regardless of what the lifespan passed.
+        kw_fast = {**kw, "goto_sleep_on_stop": False}
+        return await original_stop(*a, **kw_fast)  # type: ignore[misc]
+
+    daemon.stop = spy_stop  # type: ignore[method-assign]
+
+    server.should_exit = True
+    thread.join(timeout=15)
+
+    assert captured.get("goto_sleep_on_stop") is False
+
+
+@pytest.mark.asyncio
+async def test_lifespan_force_safe_shutdown_overrides_flag() -> None:
+    """SIGUSR1 contract: app.state.force_safe_shutdown forces goto_sleep=True.
+
+    Mirrors the power-button path: the GPIO shutdown daemon sends SIGUSR1,
+    which sets app.state.force_safe_shutdown = True, and the lifespan
+    overrides --no-goto-sleep-on-stop so the head still reaches a safe pose
+    before motor power is cut.
+    """
+    daemon, server, thread, app = await _start_app_server_returning_app(
+        goto_sleep_on_stop=False,
+    )
+    original_stop = daemon.stop
+    captured: dict[str, object] = {}
+
+    async def spy_stop(*a: object, **kw: object) -> object:
+        captured.update(kw)
+        kw_fast = {**kw, "goto_sleep_on_stop": False}
+        return await original_stop(*a, **kw_fast)  # type: ignore[misc]
+
+    daemon.stop = spy_stop  # type: ignore[method-assign]
+
+    # What the SIGUSR1 handler would set on power-button release.
+    app.state.force_safe_shutdown = True
+
+    server.should_exit = True
+    thread.join(timeout=15)
+
+    assert captured.get("goto_sleep_on_stop") is True
 
 
 @pytest.mark.asyncio
