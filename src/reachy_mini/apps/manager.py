@@ -266,7 +266,7 @@ class AppManager:
             AppState.DONE,
             AppState.STOPPING,
         ):
-            raise RuntimeError("No app is currently running")
+            return
 
         assert self.current_app is not None
 

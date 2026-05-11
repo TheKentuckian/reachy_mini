@@ -214,7 +214,7 @@ def create_app(
                     if backend is None:
                         held_since = None
                         continue
-                    positions = backend.current_antenna_joint_positions
+                    positions = backend.get_present_antenna_joint_positions()
                     if positions is None:
                         held_since = None
                         continue
