@@ -111,12 +111,18 @@ def pressed() -> None:
     while the button is still held, so the release edge never arrives. We poll
     is_pressed rather than using when_pressed callbacks because the lgpio backend
     does not reliably fire edge callbacks on this hardware.
+
+    The debounce window must be long enough to outlast power-rail transients
+    caused by servo motors being disabled (inductive kick). 50 ms is too short;
+    empirically 1 s filters motor-induced glitches while still feeling
+    responsive to a deliberate button hold.
     """
-    # Brief settle: wait for the first transient to pass, then confirm the
-    # button is still held (not just electrical noise on the GPIO line).
-    time.sleep(0.05)
-    if not shutdown_button.is_pressed:
-        return  # noise / glitch
+    _DEBOUNCE_S = 1.0
+    deadline = time.monotonic() + _DEBOUNCE_S
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        if not shutdown_button.is_pressed:
+            return  # transient / noise — pin went high again before deadline
 
     _log("Shutdown button pressed, stopping daemon...")
     _stop_daemon_and_wait()
