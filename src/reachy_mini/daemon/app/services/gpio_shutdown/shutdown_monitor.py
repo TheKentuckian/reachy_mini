@@ -7,13 +7,27 @@ safe sleep pose before motor power is cut, then halt the system.
 import os
 import signal
 import subprocess
+import sys
 import time
-from signal import pause
 from subprocess import call
 
 from gpiozero import Button
 
 DAEMON_UNIT = "reachy-mini-daemon.service"
+_LOG_FILE = "/home/pollen/gpio_shutdown.log"
+
+
+def _log(msg: str) -> None:
+    """Write a timestamped line to both stdout (→ journald) and a file on disk."""
+    line = f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {msg}"
+    print(line, flush=True)
+    try:
+        with open(_LOG_FILE, "a") as f:
+            f.write(line + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError:
+        pass
 # Upper bound for graceful daemon shutdown. Keep this strictly greater than
 # TimeoutStopSec in reachy-mini-daemon.service (currently 20s): if the daemon
 # hangs mid-goto_sleep, systemd will SIGKILL it at TimeoutStopSec and we want
@@ -21,7 +35,7 @@ DAEMON_UNIT = "reachy-mini-daemon.service"
 # unit's TimeoutStopSec, raise this too.
 DAEMON_STOP_TIMEOUT_S = 25.0
 
-shutdown_button = Button(23, pull_up=False)
+shutdown_button = Button(23, pull_up=True)
 
 
 def _daemon_main_pid() -> int:
@@ -34,7 +48,7 @@ def _daemon_main_pid() -> int:
             timeout=3,
         )
     except (subprocess.SubprocessError, FileNotFoundError) as exc:
-        print(f"Could not query {DAEMON_UNIT} MainPID: {exc}")
+        _log(f"Could not query {DAEMON_UNIT} MainPID: {exc}")
         return 0
     try:
         return int(result.stdout.strip() or "0")
@@ -55,16 +69,16 @@ def _stop_daemon_and_wait() -> None:
     """
     pid = _daemon_main_pid()
     if pid <= 0:
-        print(f"{DAEMON_UNIT} is not running; skipping graceful stop")
+        _log(f"{DAEMON_UNIT} is not running; skipping graceful stop")
         return
 
-    print(f"Sending SIGUSR1 (force safe shutdown) to {DAEMON_UNIT} (PID {pid})")
+    _log(f"Sending SIGUSR1 (force safe shutdown) to {DAEMON_UNIT} (PID {pid})")
     try:
         os.kill(pid, signal.SIGUSR1)
     except ProcessLookupError:
         return
     except PermissionError as exc:
-        print(f"Could not signal daemon: {exc}")
+        _log(f"Could not signal daemon: {exc}")
         return
 
     deadline = time.monotonic() + DAEMON_STOP_TIMEOUT_S
@@ -72,29 +86,37 @@ def _stop_daemon_and_wait() -> None:
         try:
             os.kill(pid, 0)
         except ProcessLookupError:
-            print(f"{DAEMON_UNIT} exited cleanly")
+            _log(f"{DAEMON_UNIT} exited cleanly")
             return
         time.sleep(0.2)
 
-    print(f"{DAEMON_UNIT} did not exit within {DAEMON_STOP_TIMEOUT_S}s; halting anyway")
+    _log(f"{DAEMON_UNIT} did not exit within {DAEMON_STOP_TIMEOUT_S}s; halting anyway")
 
 
-def released() -> None:
-    """Handle shutdown button released."""
-    for _ in range(200):
-        time.sleep(0.001)
+def pressed() -> None:
+    """Handle shutdown button pressed.
 
-        if shutdown_button.is_pressed:
-            # probably just a bounce, ignore
-            return
+    GPIO 23 is active-LOW: the hardware holds the pin HIGH at rest and drives it
+    LOW when the button is pressed. With pull_up=True, gpiozero treats LOW as
+    pressed (is_pressed=True). On Wireless Reachy Mini the hardware cuts power
+    while the button is still held, so the release edge never arrives. We poll
+    is_pressed rather than using when_pressed callbacks because the lgpio backend
+    does not reliably fire edge callbacks on this hardware.
+    """
+    # Brief settle: wait for the first transient to pass, then confirm the
+    # button is still held (not just electrical noise on the GPIO line).
+    time.sleep(0.05)
+    if not shutdown_button.is_pressed:
+        return  # noise / glitch
 
-    print("Shutdown button released, stopping daemon...")
+    _log("Shutdown button pressed, stopping daemon...")
     _stop_daemon_and_wait()
-    print("Shutting down...")
+    _log("Shutting down...")
     call(["sudo", "shutdown", "-h", "now"])
 
 
-shutdown_button.when_released = released
-
-print("Monitoring GPIO23 for shutdown signal...")
-pause()
+_log("Monitoring GPIO23 for shutdown signal...")
+while True:
+    time.sleep(0.1)
+    if shutdown_button.is_pressed:
+        pressed()

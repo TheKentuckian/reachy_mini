@@ -10,6 +10,7 @@ managing the robot's state.
 import argparse
 import asyncio
 import logging
+import os
 import signal
 import sys
 import time
@@ -119,11 +120,15 @@ def create_app(
         else (False if args.wireless_version else True)
     )
 
+    _ANTENNA_SLEEP_THRESHOLD = 0.4  # radians — inward from neutral
+    _ANTENNA_SLEEP_HOLD_S = 0.5  # s both antennas must stay displaced
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
         dataset_updater_task: asyncio.Task[None] | None = None
+        antenna_sleep_task: asyncio.Task[None] | None = None
 
         mdns = MdnsServiceRegistration(args.robot_name, args.fastapi_port)
 
@@ -149,6 +154,57 @@ def create_app(
                     break
                 except Exception as e:
                     logger.warning(f"Error in dataset updater: {e}")
+
+        async def antenna_sleep_monitor() -> None:
+            """Trigger goto_sleep when both antennas are squeezed inward.
+
+            Gesture: hold left < -threshold AND right > threshold for
+            _ANTENNA_SLEEP_HOLD_S seconds. Sign convention matches
+            SLEEP_ANTENNAS_JOINT_POSITIONS (-3.05, +3.05): inward rotation
+            from neutral goes negative on the left and positive on the right.
+            Stops any running app first, then moves to sleep pose. The daemon
+            keeps running so the user can power off manually.
+            Disable by setting REACHY_ANTENNA_SLEEP=0 in the environment.
+            """
+            if os.environ.get("REACHY_ANTENNA_SLEEP", "1") == "0":
+                logger.info("Antenna sleep gesture disabled via REACHY_ANTENNA_SLEEP=0")
+                return
+
+            held_since: float | None = None
+            logger.info("Antenna sleep monitor started")
+
+            while True:
+                await asyncio.sleep(0.1)
+                try:
+                    backend = app.state.daemon.backend
+                    if backend is None:
+                        held_since = None
+                        continue
+                    positions = backend.current_antenna_joint_positions
+                    if positions is None:
+                        held_since = None
+                        continue
+                    left, right = float(positions[0]), float(positions[1])
+                    if left < -_ANTENNA_SLEEP_THRESHOLD and right > _ANTENNA_SLEEP_THRESHOLD:
+                        now = asyncio.get_event_loop().time()
+                        if held_since is None:
+                            held_since = now
+                        elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
+                            logger.info("Antenna sleep gesture detected — stopping app and going to sleep")
+                            try:
+                                await app.state.app_manager.stop_current_app()
+                            except Exception:
+                                logger.warning("Error stopping app during antenna sleep gesture", exc_info=True)
+                            try:
+                                await backend.goto_sleep()
+                            except Exception:
+                                logger.warning("Error in goto_sleep during antenna gesture", exc_info=True)
+                            return
+                    else:
+                        held_since = None
+                except Exception:
+                    logger.warning("Antenna sleep monitor error", exc_info=True)
+                    held_since = None
 
         # Pre-download recorded move datasets in background to avoid delays on first play
         # This runs in asyncio's default ThreadPoolExecutor (fire and forget)
@@ -202,6 +258,8 @@ def create_app(
                 with timing_event("daemon.mdns.register", robot_name=args.robot_name):
                     mdns.register()
 
+            antenna_sleep_task = asyncio.create_task(antenna_sleep_monitor())
+
             yield
         finally:
             # Cancel dataset updater task if running
@@ -211,6 +269,13 @@ def create_app(
                 dataset_updater_task.cancel()
                 try:
                     await dataset_updater_task
+                except asyncio.CancelledError:
+                    pass
+
+            if antenna_sleep_task and not antenna_sleep_task.done():
+                antenna_sleep_task.cancel()
+                try:
+                    await antenna_sleep_task
                 except asyncio.CancelledError:
                     pass
 
