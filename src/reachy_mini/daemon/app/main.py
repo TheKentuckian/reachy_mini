@@ -9,6 +9,7 @@ managing the robot's state.
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -120,8 +121,11 @@ def create_app(
         else (False if args.wireless_version else True)
     )
 
-    _ANTENNA_SLEEP_THRESHOLD = 0.4  # radians — inward from neutral
-    _ANTENNA_SLEEP_HOLD_S = 0.5  # s both antennas must stay displaced
+    _ANTENNA_SLEEP_THRESHOLD = 0.4  # radians — inward from neutral / outward from sleep
+    _ANTENNA_SLEEP_HOLD_S = 0.5   # s both antennas must stay displaced
+    # Sleep pose constants (must match AbstractBackend.SLEEP_ANTENNAS_JOINT_POSITIONS)
+    _ANTENNA_LEFT_SLEEP = -3.05   # radians
+    _ANTENNA_RIGHT_SLEEP = 3.05   # radians
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -156,20 +160,50 @@ def create_app(
                     logger.warning(f"Error in dataset updater: {e}")
 
         async def antenna_sleep_monitor() -> None:
-            """Trigger goto_sleep when both antennas are squeezed inward.
+            """Two-gesture antenna state machine: sleep and wake.
 
-            Gesture: hold left < -threshold AND right > threshold for
-            _ANTENNA_SLEEP_HOLD_S seconds. Sign convention matches
-            SLEEP_ANTENNAS_JOINT_POSITIONS (-3.05, +3.05): inward rotation
-            from neutral goes negative on the left and positive on the right.
-            Stops any running app first, then moves to sleep pose. The daemon
-            keeps running so the user can power off manually.
-            Disable by setting REACHY_ANTENNA_SLEEP=0 in the environment.
+            Sleep gesture (awake state): hold left < -threshold AND
+            right > threshold for _ANTENNA_SLEEP_HOLD_S seconds. Stops any
+            running app, then calls goto_sleep(). Daemon keeps running.
+
+            Wake gesture (sleeping state): hold both antennas pushed outward
+            from their sleep positions by at least _ANTENNA_SLEEP_THRESHOLD
+            (left > _ANTENNA_LEFT_SLEEP + threshold, right < _ANTENNA_RIGHT_SLEEP
+            - threshold). Calls wake_up(), then launches the autostart app if one
+            is configured in /etc/reachy-mini/autostart.json.
+
+            Disable entirely via REACHY_ANTENNA_SLEEP=0 in the environment.
             """
             if os.environ.get("REACHY_ANTENNA_SLEEP", "1") == "0":
                 logger.info("Antenna sleep gesture disabled via REACHY_ANTENNA_SLEEP=0")
                 return
 
+            async def _start_autostart_app() -> None:
+                cfg_path = Path("/etc/reachy-mini/autostart.json")
+                if not cfg_path.exists():
+                    return
+                try:
+                    cfg = json.loads(cfg_path.read_text())
+                except Exception:
+                    logger.warning("Could not read autostart config", exc_info=True)
+                    return
+                if not cfg.get("app_autostart_enabled"):
+                    return
+                module = cfg.get("app_module")
+                if not module or not isinstance(module, str):
+                    return
+                app_args = [str(a) for a in (cfg.get("app_args") or [])]
+                logger.info(f"Antenna wake gesture: starting autostart app {module!r}")
+                try:
+                    await asyncio.create_subprocess_exec(
+                        "/venvs/apps_venv/bin/python",
+                        "-u", "-m", module,
+                        *app_args,
+                    )
+                except Exception:
+                    logger.warning("Failed to spawn autostart app after wake gesture", exc_info=True)
+
+            awake = True
             held_since: float | None = None
             logger.info("Antenna sleep monitor started")
 
@@ -185,23 +219,45 @@ def create_app(
                         held_since = None
                         continue
                     left, right = float(positions[0]), float(positions[1])
-                    if left < -_ANTENNA_SLEEP_THRESHOLD and right > _ANTENNA_SLEEP_THRESHOLD:
-                        now = asyncio.get_event_loop().time()
-                        if held_since is None:
-                            held_since = now
-                        elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
-                            logger.info("Antenna sleep gesture detected — stopping app and going to sleep")
-                            try:
-                                await app.state.app_manager.stop_current_app()
-                            except Exception:
-                                logger.warning("Error stopping app during antenna sleep gesture", exc_info=True)
-                            try:
-                                await backend.goto_sleep()
-                            except Exception:
-                                logger.warning("Error in goto_sleep during antenna gesture", exc_info=True)
-                            return
+                    now = asyncio.get_event_loop().time()
+
+                    if awake:
+                        # Sleep gesture: both antennas squeezed inward from neutral
+                        if left < -_ANTENNA_SLEEP_THRESHOLD and right > _ANTENNA_SLEEP_THRESHOLD:
+                            if held_since is None:
+                                held_since = now
+                            elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
+                                held_since = None
+                                logger.info("Antenna sleep gesture — stopping app and going to sleep")
+                                try:
+                                    await app.state.app_manager.stop_current_app()
+                                except Exception:
+                                    logger.warning("Error stopping app during antenna sleep gesture", exc_info=True)
+                                try:
+                                    await backend.goto_sleep()
+                                except Exception:
+                                    logger.warning("Error in goto_sleep during antenna gesture", exc_info=True)
+                                awake = False
+                        else:
+                            held_since = None
                     else:
-                        held_since = None
+                        # Wake gesture: both antennas pushed outward from sleep positions
+                        wake_l = left > _ANTENNA_LEFT_SLEEP + _ANTENNA_SLEEP_THRESHOLD
+                        wake_r = right < _ANTENNA_RIGHT_SLEEP - _ANTENNA_SLEEP_THRESHOLD
+                        if wake_l and wake_r:
+                            if held_since is None:
+                                held_since = now
+                            elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
+                                held_since = None
+                                logger.info("Antenna wake gesture — waking up")
+                                try:
+                                    await backend.wake_up()
+                                except Exception:
+                                    logger.warning("Error in wake_up during antenna gesture", exc_info=True)
+                                await _start_autostart_app()
+                                awake = True
+                        else:
+                            held_since = None
                 except Exception:
                     logger.warning("Antenna sleep monitor error", exc_info=True)
                     held_since = None

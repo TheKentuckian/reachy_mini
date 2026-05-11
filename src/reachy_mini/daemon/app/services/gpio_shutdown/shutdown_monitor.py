@@ -17,12 +17,21 @@ DAEMON_UNIT = "reachy-mini-daemon.service"
 _LOG_FILE = "/home/pollen/gpio_shutdown.log"
 
 
+_LOG_MAX_BYTES = 10_240  # 10 KB — truncate rather than grow unboundedly
+
+
 def _log(msg: str) -> None:
     """Write a timestamped line to both stdout (→ journald) and a file on disk."""
     line = f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {msg}"
     print(line, flush=True)
     try:
-        with open(_LOG_FILE, "a") as f:
+        mode = "a"
+        try:
+            if os.path.getsize(_LOG_FILE) > _LOG_MAX_BYTES:
+                mode = "w"
+        except OSError:
+            pass
+        with open(_LOG_FILE, mode) as f:
             f.write(line + "\n")
             f.flush()
             os.fsync(f.fileno())
