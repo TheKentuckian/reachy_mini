@@ -104,6 +104,8 @@ class Args:
 
     localhost_only: bool | None = None
 
+    central_relay: bool = False
+
 
 def create_app(
     args: Args,
@@ -263,6 +265,7 @@ def create_app(
             log_level=args.log_level,
             no_media=args.no_media,
             sim_mode=sim_mode,
+            central_relay=args.central_relay,
         )
     with timing_event(
         "daemon.create_app.app_manager_construct",
@@ -704,6 +707,19 @@ def main() -> None:
         action="store_false",
         dest="localhost_only",
         help="Allow the server to listen on all interfaces (default: False).",
+    )
+    parser.add_argument(
+        "--central-relay",
+        action="store_true",
+        default=default_args.central_relay,
+        dest="central_relay",
+        help="Enable the HuggingFace central signaling relay for remote WebRTC access (default: disabled).",
+    )
+    parser.add_argument(
+        "--no-central-relay",
+        action="store_false",
+        dest="central_relay",
+        help="Disable the HuggingFace central signaling relay (default).",
     )
     # Kinematics options
     parser.add_argument(
