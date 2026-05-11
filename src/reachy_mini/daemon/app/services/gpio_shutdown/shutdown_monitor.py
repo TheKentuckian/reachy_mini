@@ -14,9 +14,11 @@ from subprocess import call
 from gpiozero import Button
 
 DAEMON_UNIT = "reachy-mini-daemon.service"
-# Upper bound for graceful daemon shutdown. Must be >= TimeoutStopSec in the
-# daemon unit file (currently 20s) so we don't halt while the daemon is still
-# moving the head to the sleep pose.
+# Upper bound for graceful daemon shutdown. Keep this strictly greater than
+# TimeoutStopSec in reachy-mini-daemon.service (currently 20s): if the daemon
+# hangs mid-goto_sleep, systemd will SIGKILL it at TimeoutStopSec and we want
+# to see the PID disappear before halting, not race past it. If you raise the
+# unit's TimeoutStopSec, raise this too.
 DAEMON_STOP_TIMEOUT_S = 25.0
 
 shutdown_button = Button(23, pull_up=False)
