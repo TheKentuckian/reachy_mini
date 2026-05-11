@@ -10,6 +10,7 @@ managing the robot's state.
 import argparse
 import asyncio
 import logging
+import signal
 import sys
 import time
 import types
@@ -429,6 +430,22 @@ def run_app(args: Args) -> None:
         )
         server = uvicorn.Server(config)
 
+        # uvicorn installs its own SIGINT/SIGTERM handlers once server.serve()
+        # starts running; this covers the gap before that, so a SIGTERM during
+        # daemon startup still produces a graceful exit (lifespan finally runs
+        # daemon.stop(goto_sleep_on_stop=True), moving the head to a safe pose
+        # before motor power is cut).
+        def _request_graceful_shutdown() -> None:
+            if not server.should_exit:
+                logger.info("Received SIGTERM, requesting graceful shutdown.")
+                server.should_exit = True
+
+        try:
+            loop.add_signal_handler(signal.SIGTERM, _request_graceful_shutdown)
+        except NotImplementedError:
+            # add_signal_handler is POSIX-only; fall back to signal.signal.
+            signal.signal(signal.SIGTERM, lambda *_: _request_graceful_shutdown())
+
         health_check_task = None
         readiness_task: asyncio.Task[None] | None = None
         watchdog_task: asyncio.Task[None] | None = None
@@ -458,7 +475,9 @@ def run_app(args: Args) -> None:
                 if server.started:
                     log_event(
                         "daemon.uvicorn.startup",
-                        duration_ms=round((time.perf_counter() - _t_serve_start) * 1000, 3),
+                        duration_ms=round(
+                            (time.perf_counter() - _t_serve_start) * 1000, 3
+                        ),
                     )
                     daemon_status = app.state.daemon.status()
                     if args.autostart and daemon_status.state != DaemonState.RUNNING:
