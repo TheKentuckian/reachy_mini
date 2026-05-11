@@ -41,21 +41,24 @@ def _daemon_main_pid() -> int:
 
 
 def _stop_daemon_and_wait() -> None:
-    """SIGTERM reachy-mini-daemon and block until it exits or times out.
+    """Force a safe shutdown of reachy-mini-daemon and block until it exits.
 
-    Runs as the same user as the daemon (pollen), so we can signal it directly
-    without sudo. uvicorn's signal handlers translate SIGTERM into a clean
-    shutdown that runs the FastAPI lifespan finally block, which calls
-    daemon.stop(goto_sleep_on_stop=True) and moves the head to SLEEP_HEAD_POSE.
+    SIGUSR1 (not SIGTERM) is the contract for "power-button shutdown": the
+    daemon overrides --no-goto-sleep-on-stop and always moves the head to
+    SLEEP_HEAD_POSE before exiting. SIGTERM stays available for dev-style
+    stops that should respect the CLI flag.
+
+    Runs as the same user as the daemon (pollen), so we can signal it
+    directly without sudo.
     """
     pid = _daemon_main_pid()
     if pid <= 0:
         print(f"{DAEMON_UNIT} is not running; skipping graceful stop")
         return
 
-    print(f"Sending SIGTERM to {DAEMON_UNIT} (PID {pid})")
+    print(f"Sending SIGUSR1 (force safe shutdown) to {DAEMON_UNIT} (PID {pid})")
     try:
-        os.kill(pid, signal.SIGTERM)
+        os.kill(pid, signal.SIGUSR1)
     except ProcessLookupError:
         return
     except PermissionError as exc:
