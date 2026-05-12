@@ -196,7 +196,7 @@ def create_app(
                 logger.info(f"Antenna wake gesture: starting {_AUTOSTART_UNIT}")
                 try:
                     proc = await asyncio.create_subprocess_exec(
-                        "systemctl", "start", _AUTOSTART_UNIT,
+                        "sudo", "systemctl", "start", _AUTOSTART_UNIT,
                     )
                     await proc.wait()
                     if proc.returncode != 0:
@@ -208,7 +208,7 @@ def create_app(
                 """Stop the autostart service, covering apps launched outside the app_manager."""
                 try:
                     proc = await asyncio.create_subprocess_exec(
-                        "systemctl", "stop", _AUTOSTART_UNIT,
+                        "sudo", "systemctl", "stop", _AUTOSTART_UNIT,
                     )
                     await proc.wait()
                 except Exception:
