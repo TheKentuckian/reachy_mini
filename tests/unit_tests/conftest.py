@@ -25,6 +25,18 @@ from reachy_mini.media.camera_constants import (
 )
 
 
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Auto-skip tests that require hardware not available in a standard test run."""
+    skip_wireless = pytest.mark.skip(
+        reason="requires a connected wireless Reachy Mini; run manually on hardware"
+    )
+    for item in items:
+        if item.get_closest_marker("wireless"):
+            item.add_marker(skip_wireless)
+
+
 def _gst_ipc_available() -> bool:
     """Check if GStreamer and the platform IPC sink plugin are available.
 

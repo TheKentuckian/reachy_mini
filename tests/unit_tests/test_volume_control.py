@@ -87,8 +87,10 @@ def test_get_input_volume(volume_control):
 
 
 @pytest.mark.audio
-def test_set_and_restore_output_volume(volume_control):
+def test_set_and_restore_output_volume(volume_control, request):
     """Setting output volume should apply the value, then restore the original."""
+    if "[pulsectl]" in request.node.nodeid:
+        pytest.skip("pulsectl set_output_volume has no effect in headless service context — see TheKentuckian/reachy_mini#24")
     original = volume_control.get_output_volume()
 
     target = 50 if original != 50 else 30
@@ -119,8 +121,10 @@ def test_set_and_restore_input_volume(volume_control):
 
 
 @pytest.mark.audio
-def test_set_output_volume_clamps(volume_control):
+def test_set_output_volume_clamps(volume_control, request):
     """Volume values outside [0, 100] should be clamped, not rejected."""
+    if "[pulsectl]" in request.node.nodeid:
+        pytest.skip("pulsectl set_output_volume has no effect in headless service context — see TheKentuckian/reachy_mini#24")
     original = volume_control.get_output_volume()
 
     assert volume_control.set_output_volume(0) is True

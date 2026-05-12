@@ -7,6 +7,7 @@ import pytest
     platform.system() == "Windows", reason="Placo is not available on Windows"
 )
 def test_load_kinematics():  # noqa: D100, D103
+    pytest.importorskip("placo", reason="placo not installed")
     from reachy_mini.utils.constants import URDF_ROOT_PATH
     from reachy_mini.kinematics import PlacoKinematics
 

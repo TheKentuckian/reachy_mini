@@ -21,7 +21,7 @@ async def test_app() -> None:
             time.sleep(1)  # Simulate some processing time
 
     args = Args(
-        sim=True,
+        mockup_sim=True,
         headless=True,
         wake_up_on_start=False,
         no_media=True,
@@ -56,7 +56,7 @@ async def test_app() -> None:
 async def test_app_manager() -> None:
     daemon = Daemon(no_media=True)
     await daemon.start(
-        sim=True,
+        mockup_sim=True,
         headless=True,
         wake_up_on_start=False,
         use_audio=False,
@@ -107,6 +107,9 @@ async def test_app_manager() -> None:
         await daemon.stop(goto_sleep_on_stop=False)
 
 
+@pytest.mark.skip(
+    reason="hardcodes port 8000 which the live daemon holds on-device; needs configurable port — see TheKentuckian/reachy_mini#24"
+)
 @pytest.mark.asyncio
 async def test_faulty_app() -> None:
     # Start a real app server on port 8000 so the faulty app subprocess
@@ -114,7 +117,7 @@ async def test_faulty_app() -> None:
     # Without a server, the subprocess falls back to reachy-mini.local DNS
     # resolution which hangs in CI, causing the test to time out.
     args = Args(
-        sim=True,
+        mockup_sim=True,
         headless=True,
         wake_up_on_start=False,
         no_media=True,
