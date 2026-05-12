@@ -127,7 +127,7 @@ def pressed() -> None:
     _log("Shutdown button pressed, stopping daemon...")
     _stop_daemon_and_wait()
     _log("Shutting down...")
-    call(["sudo", "shutdown", "-h", "now"])
+    call(["sudo", "shutdown", "--poweroff", "now"])
 
 
 # Ignore button state for the first few seconds after boot. On Wireless

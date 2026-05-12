@@ -216,9 +216,11 @@ def create_app(
 
             awake = True
             held_since: float | None = None
-            last_debug_log_t: float = 0.0
             _service_active_cache: bool = False
             _service_active_last_checked: float = -999.0
+            _motor_error_count: int = 0
+            _MOTOR_ERROR_BACKOFF_AFTER = 5
+            _MOTOR_ERROR_BACKOFF_S = 3.0
             logger.info("Antenna sleep monitor started")
 
             while True:
@@ -278,13 +280,6 @@ def create_app(
                         # Wake gesture: both antennas pushed outward from sleep positions
                         wake_l = left > _ANTENNA_LEFT_SLEEP + _ANTENNA_SLEEP_THRESHOLD
                         wake_r = right < _ANTENNA_RIGHT_SLEEP - _ANTENNA_SLEEP_THRESHOLD
-                        if now - last_debug_log_t >= 1.0:
-                            last_debug_log_t = now
-                            logger.info(
-                                f"[sleep-debug] left={left:.3f} right={right:.3f}"
-                                f" | wake_l={wake_l} (need >{_ANTENNA_LEFT_SLEEP + _ANTENNA_SLEEP_THRESHOLD:.2f})"
-                                f" wake_r={wake_r} (need <{_ANTENNA_RIGHT_SLEEP - _ANTENNA_SLEEP_THRESHOLD:.2f})"
-                            )
                         if wake_l and wake_r:
                             if held_since is None:
                                 held_since = now
@@ -301,8 +296,13 @@ def create_app(
                         else:
                             held_since = None
                 except Exception:
+                    _motor_error_count += 1
                     logger.warning("Antenna sleep monitor error", exc_info=True)
                     held_since = None
+                    if _motor_error_count >= _MOTOR_ERROR_BACKOFF_AFTER:
+                        await asyncio.sleep(_MOTOR_ERROR_BACKOFF_S)
+                else:
+                    _motor_error_count = 0
 
         # Pre-download recorded move datasets in background to avoid delays on first play
         # This runs in asyncio's default ThreadPoolExecutor (fire and forget)
