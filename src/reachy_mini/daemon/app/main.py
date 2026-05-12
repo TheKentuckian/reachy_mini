@@ -658,8 +658,10 @@ def run_app(args: Args) -> None:
 
         try:
             _t_serve_start = time.perf_counter()
+            _daemon_startup_failed = False
 
             async def notify_when_serving() -> None:
+                nonlocal _daemon_startup_failed
                 while not server.started and not server.should_exit:
                     await asyncio.sleep(0.05)
                 if server.started:
@@ -674,6 +676,12 @@ def run_app(args: Args) -> None:
                         systemd_notifier.status(
                             f"Daemon startup failed: {daemon_status.state.value}"
                         )
+                        # Trigger graceful shutdown so the lifespan finally block
+                        # runs (parks the robot safely) before we exit non-zero.
+                        # Without this, the early return leaves systemd stuck in
+                        # "activating" state until TimeoutStartSec expires (~90s).
+                        _daemon_startup_failed = True
+                        server.should_exit = True
                         return
                     systemd_notifier.ready(
                         "FastAPI serving; Reachy Mini daemon startup complete"
@@ -686,6 +694,10 @@ def run_app(args: Args) -> None:
                     health_check_timeout(args.timeout_health_check)
                 )
             await server.serve()
+            if _daemon_startup_failed:
+                raise RuntimeError(
+                    f"Daemon failed to reach RUNNING state — triggering Restart=on-failure"
+                )
         except KeyboardInterrupt:
             logger.info("Received Ctrl-C, shutting down gracefully.")
         except Exception as e:
