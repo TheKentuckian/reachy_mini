@@ -661,6 +661,9 @@ def run_app(args: Args) -> None:
             _daemon_startup_failed = False
 
             async def notify_when_serving() -> None:
+                # ERROR paths in daemon.start(): backend.ready.wait() timeout (2s),
+                # wake_up() exception, or backend thread error. status() also flips
+                # state to ERROR if backend_status.error is set at call time.
                 nonlocal _daemon_startup_failed
                 while not server.started and not server.should_exit:
                     await asyncio.sleep(0.05)
@@ -672,6 +675,11 @@ def run_app(args: Args) -> None:
                         ),
                     )
                     daemon_status = app.state.daemon.status()
+                    logger.info(
+                        "notify_when_serving: state=%s%s",
+                        daemon_status.state.value,
+                        f", error={daemon_status.error!r}" if daemon_status.error else "",
+                    )
                     if args.autostart and daemon_status.state != DaemonState.RUNNING:
                         systemd_notifier.status(
                             f"Daemon startup failed: {daemon_status.state.value}"

@@ -127,7 +127,12 @@ class GstMediaServer:
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
 
-        self._build_pipeline()
+        # Pipeline is built lazily in start() to avoid doing the work twice:
+        # __init__ used to call _build_pipeline() here but start() already
+        # rebuilds from scratch before set_state(PLAYING), so the pipeline
+        # created here was always thrown away unused.
+        self._pipeline_sender: Optional[Gst.Pipeline] = None
+        self._bus_sender: Optional[Gst.Bus] = None
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
@@ -148,7 +153,8 @@ class GstMediaServer:
         """Release GStreamer resources (MainLoop, bus watch)."""
         self._logger.debug("Cleaning up GstMediaServer")
         self._loop.quit()
-        self._bus_sender.remove_watch()
+        if self._bus_sender is not None:
+            self._bus_sender.remove_watch()
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
@@ -885,7 +891,8 @@ class GstMediaServer:
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
-        self._pipeline_sender.set_state(Gst.State.NULL)
+        if self._pipeline_sender is not None:
+            self._pipeline_sender.set_state(Gst.State.NULL)
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.

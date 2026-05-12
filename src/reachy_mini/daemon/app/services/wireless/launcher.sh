@@ -1,4 +1,7 @@
 #!/bin/bash
+# Journal entry timestamped by journald — compare with first Python log line
+# to measure venv-activation cost without needing an RTC.
+echo "launcher.sh started at $(date -Iseconds)"
 source /venvs/mini_daemon/bin/activate
 export GST_PLUGIN_PATH=$GST_PLUGIN_PATH:/opt/gst-plugins-rs/lib/aarch64-linux-gnu/
 export PATH=$PATH:/opt/uv
