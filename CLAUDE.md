@@ -4,26 +4,17 @@ Read `AGENTS.md` in this directory for full instructions on developing Reachy Mi
 
 ## Environment
 
-This project uses the **central `/venvs/mini_daemon`** venv. There is no local `.venv` — do **not** run `uv sync` bare in this directory, as uv will create a local `.venv` and waste ~400MB of disk space on a duplicate install.
+This project uses the **central `/venvs/mini_daemon`** venv. There is no local `.venv`.
 
-Set this once in your shell (or add to `~/.bashrc`):
-
-```bash
-export UV_PROJECT_ENVIRONMENT=/venvs/mini_daemon
-```
-
-With that set, all `uv` commands route to the central venv. To install or update dependencies:
+**Do not use `uv` on this device.** The Pi's SD card is small (14 GB) and `uv`'s on-disk cache balloons to multiple gigabytes — it has filled the disk before. Use the venv's pip directly instead:
 
 ```bash
-uv pip install -e .        # Reinstall after editing pyproject.toml
-uv lock                    # Update the lock file
-```
-
-To run tests:
-
-```bash
+/venvs/mini_daemon/bin/pip install -e .   # Reinstall after editing pyproject.toml
 /venvs/mini_daemon/bin/pytest tests/unit_tests/ -v
+/venvs/mini_daemon/bin/python -m ...      # Anything else you'd `uv run`
 ```
+
+Lock-file maintenance (`uv lock`) — if needed — should be done off-device on a workstation, then `uv.lock` committed. Do not run `uv lock` here.
 
 ## Git / GitHub rules
 
