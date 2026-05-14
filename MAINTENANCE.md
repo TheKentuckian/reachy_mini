@@ -61,7 +61,9 @@ Description=Reachy Mini app autostart (config-driven)
 After=reachy-mini-daemon.service
 Wants=reachy-mini-daemon.service
 StartLimitIntervalSec=120
-StartLimitBurst=3
+# Raised from 3 → 10: operator-initiated restarts shouldn't consume the crash-loop budget.
+# The boot-loop guard in launcher.sh (commit e92a9c89) provides the real brake.
+StartLimitBurst=10
 
 [Service]
 Type=simple
@@ -258,15 +260,45 @@ To disable autostart without removing the config, set `"app_autostart_enabled": 
 
 ---
 
+## §3 — Restarting the autostart app
+
+**Prefer** the daemon endpoint — it performs `stop → reset-failed → start` atomically and avoids the auto-restart race described in [#25](https://github.com/TheKentuckian/reachy_mini/issues/25):
+
+```bash
+curl -X POST http://localhost:8000/api/autostart/restart
+```
+
+**Manual fallback (SSH):**
+
+```bash
+sudo systemctl stop reachy-app-autostart \
+  && sleep 1 \
+  && sudo systemctl reset-failed reachy-app-autostart \
+  && sudo systemctl start reachy-app-autostart
+```
+
+> **Warning**: do not use bare `sudo systemctl restart reachy-app-autostart`.
+> When the unit has just crashed, systemd already has a restart queued (`RestartSec=5`).
+> The manual restart races with that queued restart, can be canceled, and burns
+> `StartLimitBurst` entries — leaving the unit in `failed`.  See [#25](https://github.com/TheKentuckian/reachy_mini/issues/25).
+
+---
+
 ## §4 — Polkit rule
 
-Allows user `pollen` to `start`/`stop` `reachy-app-autostart.service` without a
-password.  Required for the antenna wake gesture (issue #23).
+Allows user `pollen` to `start`/`stop`/`reset-failed` `reachy-app-autostart.service`
+without a password.  Required for the antenna wake gesture (issue #23) and the
+safe-restart endpoint (issue #25).
+
+`reset-failed` is covered by the same `org.freedesktop.systemd1.manage-units`
+action as `start`/`stop`, so no rule change is needed.  The comment below has
+been updated to reflect the full set of operations.
 
 ```bash
 sudo tee /etc/polkit-1/rules.d/50-reachy.rules << 'EOF'
-/* Allow user pollen to start/stop reachy-app-autostart.service without a password.
-   Required for the antenna wake gesture, which runs as user pollen inside the daemon. */
+/* Allow user pollen to start/stop/reset-failed reachy-app-autostart.service without a
+   password.  Required for the antenna wake gesture (#23) and the safe-restart
+   endpoint (#25).  All three operations fall under manage-units. */
 polkit.addRule(function(action, subject) {
     if (action.id == "org.freedesktop.systemd1.manage-units" &&
         action.lookup("unit") == "reachy-app-autostart.service" &&

@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -88,6 +89,19 @@ def _systemctl(*args: str) -> tuple[int, str, str]:
     try:
         proc = subprocess.run(
             ["systemctl", *args], capture_output=True, text=True, timeout=5
+        )
+        return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+    except subprocess.TimeoutExpired:
+        return 1, "", "systemctl timed out"
+
+
+def _systemctl_sudo(*args: str) -> tuple[int, str, str]:
+    """Run systemctl with sudo; for privileged unit operations."""
+    if not shutil.which("systemctl"):
+        return 1, "", "systemctl not found"
+    try:
+        proc = subprocess.run(
+            ["sudo", "systemctl", *args], capture_output=True, text=True, timeout=10
         )
         return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
     except subprocess.TimeoutExpired:
@@ -185,3 +199,27 @@ def daemon_autostart_status() -> dict[str, Any]:
     """
     rc, enabled, _ = _systemctl("is-enabled", "reachy-mini-daemon.service")
     return {"enabled": enabled, "ok": rc == 0}
+
+
+@router.post("/restart")
+def restart_service() -> dict[str, Any]:
+    """Safely restart reachy-app-autostart by stopping, resetting failure state,
+    then starting. Avoids the auto-restart race documented in #25."""
+    _UNIT = "reachy-app-autostart.service"
+
+    stages: list[dict[str, Any]] = []
+
+    rc, _, stderr = _systemctl_sudo("stop", _UNIT)
+    stages.append({"name": "stop", "rc": rc, "stderr": stderr})
+
+    # Let systemd reap the stopped unit before reset-failed.
+    time.sleep(1.0)
+
+    rc, _, stderr = _systemctl_sudo("reset-failed", _UNIT)
+    stages.append({"name": "reset-failed", "rc": rc, "stderr": stderr})
+
+    rc, _, stderr = _systemctl_sudo("start", _UNIT)
+    stages.append({"name": "start", "rc": rc, "stderr": stderr})
+
+    ok = all(s["rc"] == 0 for s in stages)
+    return {"ok": ok, "stages": stages}
