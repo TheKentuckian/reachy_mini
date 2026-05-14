@@ -83,14 +83,20 @@ class ReachyMiniApp(ABC):
         """Check if daemon is reachable on localhost.
 
         Args:
-            port: Port to check (default: 8000)
+            port: Port to check (default: 8000).  Overridden by the
+                ``REACHY_DAEMON_PORT`` environment variable when set.
             timeout: Connection timeout in seconds
 
         Returns:
             True if daemon responds on localhost, False otherwise
 
         """
+        import os
         import socket
+
+        env_port = os.environ.get("REACHY_DAEMON_PORT")
+        if env_port is not None:
+            port = int(env_port)
 
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=timeout):

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import threading
 from pathlib import Path
 from threading import Event
@@ -107,25 +108,22 @@ async def test_app_manager() -> None:
         await daemon.stop(goto_sleep_on_stop=False)
 
 
-@pytest.mark.skip(
-    reason="hardcodes port 8000 which the live daemon holds on-device; needs configurable port — see TheKentuckian/reachy_mini#24"
-)
 @pytest.mark.asyncio
 async def test_faulty_app() -> None:
-    # Start a real app server on port 8000 so the faulty app subprocess
-    # can connect immediately (its _check_daemon_on_localhost checks port 8000).
-    # Without a server, the subprocess falls back to reachy-mini.local DNS
-    # resolution which hangs in CI, causing the test to time out.
+    # Start the app server on an OS-assigned ephemeral port so the test
+    # does not conflict with the live daemon (which holds port 8000 on-device).
+    # REACHY_DAEMON_PORT is injected into the subprocess env so
+    # FaultyApp._check_daemon_on_localhost() finds the right port.
     args = Args(
         mockup_sim=True,
         headless=True,
         wake_up_on_start=False,
         no_media=True,
         autostart=True,
-        fastapi_port=8000,
+        fastapi_port=0,
     )
     app = create_app(args)
-    config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="warning")
+    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
     server = uvicorn.Server(config)
     server_thread = threading.Thread(target=server.run, daemon=True)
     server_thread.start()
@@ -133,6 +131,8 @@ async def test_faulty_app() -> None:
     while not server.started:
         await asyncio.sleep(0.05)
 
+    sockets = server.servers[0].sockets  # type: ignore[union-attr]
+    ephemeral_port: int = sockets[0].getsockname()[1]
     daemon = app.state.daemon
     app_mngr = AppManager()
 
@@ -141,6 +141,7 @@ async def test_faulty_app() -> None:
         source_kind=SourceKind.LOCAL,
         extra={"path": str(Path(__file__).parent / "faulty_app")},
     )
+    os.environ["REACHY_DAEMON_PORT"] = str(ephemeral_port)
     try:
         await app_mngr.install_new_app(app_info, daemon.logger)
 
@@ -165,6 +166,7 @@ async def test_faulty_app() -> None:
     except Exception as e:
         pytest.fail(f"install_new_app raised an exception: {e}")
     finally:
+        os.environ.pop("REACHY_DAEMON_PORT", None)
         await daemon.stop(goto_sleep_on_stop=False)
         server.should_exit = True
         server_thread.join(timeout=10)

@@ -234,8 +234,18 @@ async def test_daemon_early_stop() -> None:
     await asyncio.gather(client_bg(), will_stop_soon())
 
 
-@pytest.mark.skip(
-    reason="mockup_sim uses real serial port on-device so both daemons share the same hardware — see TheKentuckian/reachy_mini#24"
+def _mujoco_available() -> bool:
+    try:
+        import mujoco  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+@pytest.mark.skipif(
+    not _mujoco_available(),
+    reason="requires MuJoCo (not installed) — mockup_sim shares real serial port on-device, see #24",
 )
 @pytest.mark.asyncio
 async def test_multi_robot_isolation() -> None:
