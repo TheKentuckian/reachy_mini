@@ -221,6 +221,15 @@ def create_app(
             _motor_error_count: int = 0
             _MOTOR_ERROR_BACKOFF_AFTER = 5
             _MOTOR_ERROR_BACKOFF_S = 3.0
+            # Consecutive good reads required after an error burst before gesture
+            # detection re-arms.  Prevents a bus recovering mid-gesture from
+            # immediately firing a spurious wake/sleep transition.
+            _MOTOR_RECOVERY_READS = 3
+            _good_reads_since_error: int = 0
+            # Minimum seconds between successive state transitions.  A genuine
+            # human antenna gesture cannot repeat faster than this.
+            _MIN_TRANSITION_INTERVAL_S = 2.0
+            _last_transition_t: float = -999.0
             logger.info("Antenna sleep monitor started")
 
             while True:
@@ -242,6 +251,15 @@ def create_app(
                         _service_active_cache = await _autostart_service_active()
                         _service_active_last_checked = now
 
+                    # Require N consecutive clean reads after an error burst before
+                    # re-arming the gesture detector.  Stale or glitched positions
+                    # returned on bus recovery cannot satisfy the hold timer while
+                    # this gate is open.
+                    if _good_reads_since_error < _MOTOR_RECOVERY_READS:
+                        _good_reads_since_error += 1
+                        held_since = None
+                        continue
+
                     if awake:
                         # Sync: if motors were disabled externally (e.g. app called goto_sleep),
                         # immediately enter sleeping state rather than waiting for antenna droop.
@@ -262,18 +280,27 @@ def create_app(
                                     held_since = now
                                 elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
                                     held_since = None
-                                    logger.info("Antenna sleep gesture — stopping app and going to sleep")
-                                    try:
-                                        await app.state.app_manager.stop_current_app()
-                                    except Exception:
-                                        logger.warning("Error stopping app during antenna sleep gesture", exc_info=True)
-                                    await _stop_autostart_app()
-                                    try:
-                                        await backend.goto_sleep()
-                                        backend.set_motor_control_mode(MotorControlMode.Disabled)
-                                    except Exception:
-                                        logger.warning("Error in goto_sleep during antenna gesture", exc_info=True)
-                                    awake = False
+                                    if now - _last_transition_t < _MIN_TRANSITION_INTERVAL_S:
+                                        logger.warning(
+                                            "Antenna sleep gesture suppressed: repeated transition "
+                                            "within %.2fs (last was %.2fs ago)",
+                                            _MIN_TRANSITION_INTERVAL_S,
+                                            now - _last_transition_t,
+                                        )
+                                    else:
+                                        _last_transition_t = now
+                                        logger.info("Antenna sleep gesture — stopping app and going to sleep")
+                                        try:
+                                            await app.state.app_manager.stop_current_app()
+                                        except Exception:
+                                            logger.warning("Error stopping app during antenna sleep gesture", exc_info=True)
+                                        await _stop_autostart_app()
+                                        try:
+                                            await backend.goto_sleep()
+                                            backend.set_motor_control_mode(MotorControlMode.Disabled)
+                                        except Exception:
+                                            logger.warning("Error in goto_sleep during antenna gesture", exc_info=True)
+                                        awake = False
                             else:
                                 held_since = None
                     else:
@@ -285,20 +312,36 @@ def create_app(
                                 held_since = now
                             elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
                                 held_since = None
-                                logger.info("Antenna wake gesture — waking up")
-                                try:
-                                    backend.set_motor_control_mode(MotorControlMode.Enabled)
-                                    await backend.wake_up()
-                                except Exception:
-                                    logger.warning("Error in wake_up during antenna gesture", exc_info=True)
-                                await _start_autostart_app()
-                                awake = True
+                                if now - _last_transition_t < _MIN_TRANSITION_INTERVAL_S:
+                                    logger.warning(
+                                        "Antenna wake gesture suppressed: repeated transition "
+                                        "within %.2fs (last was %.2fs ago)",
+                                        _MIN_TRANSITION_INTERVAL_S,
+                                        now - _last_transition_t,
+                                    )
+                                else:
+                                    _last_transition_t = now
+                                    logger.info("Antenna wake gesture — waking up")
+                                    try:
+                                        backend.set_motor_control_mode(MotorControlMode.Enabled)
+                                        await backend.wake_up()
+                                    except Exception:
+                                        logger.warning("Error in wake_up during antenna gesture", exc_info=True)
+                                    await _start_autostart_app()
+                                    awake = True
                         else:
                             held_since = None
                 except Exception:
                     _motor_error_count += 1
-                    logger.warning("Antenna sleep monitor error", exc_info=True)
+                    if _motor_error_count == 1:
+                        logger.warning("Antenna sleep monitor error", exc_info=True)
+                    else:
+                        logger.debug(
+                            "Antenna sleep monitor error (burst count=%d)", _motor_error_count,
+                            exc_info=True,
+                        )
                     held_since = None
+                    _good_reads_since_error = 0
                     if _motor_error_count >= _MOTOR_ERROR_BACKOFF_AFTER:
                         await asyncio.sleep(_MOTOR_ERROR_BACKOFF_S)
                 else:
