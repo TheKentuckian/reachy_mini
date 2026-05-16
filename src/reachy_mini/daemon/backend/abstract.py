@@ -11,6 +11,7 @@ each type of backend.
 import asyncio
 import json
 import logging
+import os
 import threading
 import time
 import typing
@@ -69,6 +70,55 @@ from reachy_mini.utils.interpolation import (
     distance_between_poses,
     time_trajectory,
 )
+
+# Conversion factor used when scaling the "magic distance" returned by
+# distance_between_poses() into a wake-up animation duration. Each unit of
+# magic distance corresponds to ~20 ms of motion.
+_MS_PER_MAGIC_MM = 20
+
+# Env vars governing wake_up() animation timing. Read at call time so operators
+# can tweak the feel without restarting the daemon between full process boots.
+_WAKE_UP_MIN_DURATION_ENV = "REACHY_WAKE_UP_MIN_DURATION_S"
+_WAKE_UP_DURATION_SCALE_ENV = "REACHY_WAKE_UP_DURATION_SCALE"
+_WAKE_UP_FLOURISH_DURATION_ENV = "REACHY_WAKE_UP_FLOURISH_DURATION_S"
+
+# Defaults make the boot wake-up feel deliberate (~5 s end-to-end) instead of
+# the previous ~2 s snap reported in TheKentuckian/robot_comic#310.
+_WAKE_UP_MIN_DURATION_DEFAULT = 3.0
+_WAKE_UP_DURATION_SCALE_DEFAULT = 1.5
+_WAKE_UP_FLOURISH_DURATION_DEFAULT = 0.4
+
+
+def _read_float_env(name: str, default: float, *, min_value: float = 0.0) -> float:
+    """Read a non-negative float from the environment, falling back on bad input.
+
+    Logs a warning (but does not raise) when the env var is set to a value that
+    cannot be parsed or is negative. This keeps the wake-up animation robust
+    against operator typos at boot time.
+    """
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logging.getLogger(__name__).warning(
+            "Invalid %s=%r, falling back to %s",
+            name,
+            raw,
+            default,
+        )
+        return default
+    if value < min_value:
+        logging.getLogger(__name__).warning(
+            "Invalid %s=%r (must be >= %s), falling back to %s",
+            name,
+            raw,
+            min_value,
+            default,
+        )
+        return default
+    return value
 
 
 class Backend:
@@ -724,7 +774,9 @@ class Backend:
         1.0032234352772091,
     ]
 
-    INIT_ANTENNAS_JOINT_POSITIONS = np.array((-0.1745, 0.1745))  # ~10° offset to reduce shaking at vertical
+    INIT_ANTENNAS_JOINT_POSITIONS = np.array(
+        (-0.1745, 0.1745)
+    )  # ~10° offset to reduce shaking at vertical
     SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-3.05, 3.05))
     SLEEP_HEAD_POSE = np.array(
         [
@@ -736,17 +788,47 @@ class Backend:
     )
 
     async def wake_up(self) -> None:
-        """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
+        """Wake up the robot - go to the initial head position and play the wake up emote and sound.
+
+        Timing is operator-tunable via three env vars (read every call):
+
+        - ``REACHY_WAKE_UP_MIN_DURATION_S`` (default 3.0): floor on the main
+          rise-to-neutral duration so a small ``magic_distance`` cannot produce
+          a sub-second snap of the head.
+        - ``REACHY_WAKE_UP_DURATION_SCALE`` (default 1.5): multiplier on the
+          distance-derived duration.
+        - ``REACHY_WAKE_UP_FLOURISH_DURATION_S`` (default 0.4): duration of each
+          of the two trailing "roll 20 deg, then back" flourish motions.
+
+        Defaults stretch a typical boot wake-up to ~5 s end-to-end. Operators
+        wanting the legacy snap can set
+        ``REACHY_WAKE_UP_MIN_DURATION_S=0``,
+        ``REACHY_WAKE_UP_DURATION_SCALE=1``,
+        ``REACHY_WAKE_UP_FLOURISH_DURATION_S=0.2``.
+        """
+        min_duration = _read_float_env(
+            _WAKE_UP_MIN_DURATION_ENV, _WAKE_UP_MIN_DURATION_DEFAULT
+        )
+        duration_scale = _read_float_env(
+            _WAKE_UP_DURATION_SCALE_ENV, _WAKE_UP_DURATION_SCALE_DEFAULT
+        )
+        flourish_duration = _read_float_env(
+            _WAKE_UP_FLOURISH_DURATION_ENV, _WAKE_UP_FLOURISH_DURATION_DEFAULT
+        )
+
         await asyncio.sleep(0.1)
 
         _, _, magic_distance = distance_between_poses(
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
 
+        scaled_duration = magic_distance * _MS_PER_MAGIC_MM / 1000 * duration_scale
+        main_duration = max(scaled_duration, min_duration)
+
         await self.goto_target(
             self.INIT_HEAD_POSE,
             antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
-            duration=magic_distance * 20 / 1000,  # ms_per_magic_mm = 10
+            duration=main_duration,
         )
         await asyncio.sleep(0.1)
 
@@ -756,10 +838,10 @@ class Backend:
         # Roll 20° to the left
         pose = self.INIT_HEAD_POSE.copy()
         pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
-        await self.goto_target(pose, duration=0.2)
+        await self.goto_target(pose, duration=flourish_duration)
 
         # Go back to the initial position
-        await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
+        await self.goto_target(self.INIT_HEAD_POSE, duration=flourish_duration)
 
     async def goto_sleep(self) -> None:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position.
@@ -783,7 +865,9 @@ class Backend:
             if dist_to_init_pose > 30:
                 # Move to the initial position
                 await self.goto_target(
-                    self.INIT_HEAD_POSE, antennas=self.INIT_ANTENNAS_JOINT_POSITIONS, duration=1
+                    self.INIT_HEAD_POSE,
+                    antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
+                    duration=1,
                 )
                 await asyncio.sleep(0.2)
 
@@ -1043,7 +1127,12 @@ class Backend:
 
         elif isinstance(
             cmd,
-            (SetVolumeCmd, GetVolumeCmd, SetMicrophoneVolumeCmd, GetMicrophoneVolumeCmd),
+            (
+                SetVolumeCmd,
+                GetVolumeCmd,
+                SetMicrophoneVolumeCmd,
+                GetMicrophoneVolumeCmd,
+            ),
         ):
             # Volume is a global robot setting, not per-session: a remote
             # change persists for the next connection. This matches the
