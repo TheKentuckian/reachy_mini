@@ -94,6 +94,20 @@ source ~/.bashrc
 
 > **💡 Note:** For ARM64 systems (like Raspberry Pi), replace `x86_64-linux-gnu` with `aarch64-linux-gnu` in the export command.
 
+### Step 4: Reclaim ~300 MB of unused static libraries (optional but recommended on Pi)
+
+`cargo cinstall` ships both runtime `.so` and build-time-only `.a` variants of each plugin. The static libraries (`.a`) are not used by the daemon at runtime — `gst-inspect-1.0` and the WebRTC paths only need the `.so` files. On the 14 GB Pi SD card, the unused `.a` files take ~300 MB combined:
+
+```bash
+sudo find /opt/gst-plugins-rs -name '*.a' -delete
+```
+
+Verify the WebRTC plugin still loads after cleanup:
+
+```bash
+gst-inspect-1.0 webrtcsink | head -5
+```
+
 
 ## ✅ Verify Installation
 
