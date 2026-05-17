@@ -461,42 +461,59 @@ class ReSpeaker:
         usb.util.dispose_resources(self.dev)
 
 
-def find(vid: int = 0x2886, pid: int = 0x001A) -> ReSpeaker | None:
-    """Find and return the ReSpeaker USB device with the given Vendor ID and Product ID.
+def _find_one(vid: int, pid: int) -> ReSpeaker | None:
+    """Low-level helper: try exactly one VID/PID pair. Returns None on miss."""
+    dev = usb.core.find(idVendor=vid, idProduct=pid, backend=get_libusb1_backend())
+    if not dev:
+        return None
+    return ReSpeaker(dev)
+
+
+def find(vid: int | None = None, pid: int | None = None) -> ReSpeaker | None:
+    """Find and return the ReSpeaker USB device.
+
+    When called with no arguments (the normal case) the function tries the
+    Pollen-branded Reachy Mini Audio IDs first (0x38fb:0x1001), then falls
+    back to the upstream XMOS XVF3800 IDs (0x2886:0x001A) so that stock
+    ReSpeaker dev boards also work without any extra arguments.
+
+    Pass explicit *vid* **and** *pid* together to target a specific device
+    and skip the auto-probe sequence entirely.
 
     Args:
-        vid (int): USB Vendor ID to search for. Default: 0x2886 (XMOS).
-        pid (int): USB Product ID to search for. Default: 0x001A (XMOS XVF3800).
+        vid (int | None): USB Vendor ID. Must be paired with *pid*.
+            Default: None (auto-probe).
+        pid (int | None): USB Product ID. Must be paired with *vid*.
+            Default: None (auto-probe).
 
     Returns:
         ReSpeaker | None: A ReSpeaker object if the device is found,
                          None otherwise.
 
-    Note:
-        This function searches for USB devices with the specified Vendor ID
-        and Product ID using libusb backend. The default values target
-        XMOS XVF3800 devices used in ReSpeaker microphone arrays.
-
     Example:
         ```python
         from reachy_mini.media.audio_control_utils import find
 
-        # Find default ReSpeaker device
+        # Auto-probe — Pollen IDs first, XMOS fallback
         respeaker = find()
         if respeaker is not None:
             print("Found ReSpeaker device")
             respeaker.close()
 
-        # Find specific device
-        custom_device = find(vid=0x1234, pid=0x5678)
+        # Explicit override for a stock XMOS dev board
+        dev_board = find(vid=0x2886, pid=0x001A)
         ```
 
     """
-    dev = usb.core.find(idVendor=vid, idProduct=pid, backend=get_libusb1_backend())
-    if not dev:
-        return None
-
-    return ReSpeaker(dev)
+    if vid is not None and pid is not None:
+        # Explicit override: try exactly what was asked for.
+        return _find_one(vid, pid)
+    # Auto-probe: Pollen-branded Reachy Mini Audio first, stock XMOS fallback.
+    for candidate_vid, candidate_pid in ((0x38FB, 0x1001), (0x2886, 0x001A)):
+        result = _find_one(candidate_vid, candidate_pid)
+        if result is not None:
+            return result
+    return None
 
 
 def init_respeaker_usb() -> Optional[ReSpeaker]:

@@ -1,11 +1,95 @@
 """Tests for Reachy Mini audio control helpers."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
-from reachy_mini.media.audio_control_utils import PARAMETERS, init_respeaker_usb
+from reachy_mini.media.audio_control_utils import PARAMETERS, find, init_respeaker_usb
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 
 AUDIO_CONFIG_PARAMETER_NAMES = ("PP_MIN_NS", "PP_NLATTENONOFF", "PP_MGSCALE")
+
+# ---------------------------------------------------------------------------
+# Unit tests for find() — no hardware required
+# ---------------------------------------------------------------------------
+
+_POLLEN_VID = 0x38FB
+_POLLEN_PID = 0x1001
+_XMOS_VID = 0x2886
+_XMOS_PID = 0x001A
+
+
+def _mock_dev() -> MagicMock:
+    """Return a minimal usb.core.Device stand-in."""
+    return MagicMock(name="usb_device")
+
+
+def test_find_no_args_tries_pollen_ids_first() -> None:
+    """find() with no arguments must probe Pollen IDs (0x38FB:0x1001) first."""
+    fake_dev = _mock_dev()
+    call_log: list[tuple[int, int]] = []
+
+    def fake_usb_find(
+        idVendor: int, idProduct: int, backend: object = None
+    ) -> MagicMock | None:
+        call_log.append((idVendor, idProduct))
+        if idVendor == _POLLEN_VID and idProduct == _POLLEN_PID:
+            return fake_dev
+        return None
+
+    with patch("reachy_mini.media.audio_control_utils.usb.core.find", fake_usb_find):
+        result = find()
+
+    assert call_log[0] == (_POLLEN_VID, _POLLEN_PID), "Pollen IDs must be probed first"
+    assert result is not None
+
+
+def test_find_no_args_falls_back_to_xmos_when_pollen_absent() -> None:
+    """find() must fall back to XMOS IDs when the Pollen device is not present."""
+    fake_dev = _mock_dev()
+
+    def fake_usb_find(
+        idVendor: int, idProduct: int, backend: object = None
+    ) -> MagicMock | None:
+        if idVendor == _XMOS_VID and idProduct == _XMOS_PID:
+            return fake_dev
+        return None
+
+    with patch("reachy_mini.media.audio_control_utils.usb.core.find", fake_usb_find):
+        result = find()
+
+    assert result is not None
+
+
+def test_find_no_args_returns_none_when_no_device_present() -> None:
+    """find() must return None when neither VID/PID pair is found."""
+    with patch(
+        "reachy_mini.media.audio_control_utils.usb.core.find", return_value=None
+    ):
+        result = find()
+
+    assert result is None
+
+
+def test_find_explicit_override_uses_only_given_ids() -> None:
+    """find(vid=..., pid=...) must try exactly the provided IDs, not the probe list."""
+    call_log: list[tuple[int, int]] = []
+
+    def fake_usb_find(
+        idVendor: int, idProduct: int, backend: object = None
+    ) -> MagicMock | None:
+        call_log.append((idVendor, idProduct))
+        if idVendor == _XMOS_VID and idProduct == _XMOS_PID:
+            return _mock_dev()
+        return None
+
+    with patch("reachy_mini.media.audio_control_utils.usb.core.find", fake_usb_find):
+        result = find(vid=_XMOS_VID, pid=_XMOS_PID)
+
+    assert result is not None
+    assert call_log == [(_XMOS_VID, _XMOS_PID)], (
+        "Only the requested IDs should be tried"
+    )
 
 
 @pytest.mark.audio
