@@ -234,18 +234,15 @@ async def test_daemon_early_stop() -> None:
     await asyncio.gather(client_bg(), will_stop_soon())
 
 
-def _mujoco_available() -> bool:
-    try:
-        import mujoco  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
-
-
-@pytest.mark.skipif(
-    not _mujoco_available(),
-    reason="requires MuJoCo (not installed) — mockup_sim shares real serial port on-device, see #24",
+@pytest.mark.skip(
+    reason=(
+        "Disabled in this fork (issue #32). The test gates a multi-instance daemon "
+        "isolation regression that's not part of our single-robot deployment; the "
+        "real serial port shared by mockup_sim=True forces it behind a MuJoCo import "
+        "we don't carry, and installing MuJoCo on the Pi (~hundreds of MB) isn't "
+        "worth the disk + maintenance cost for one test. Re-enable on a dev box by "
+        "removing this skip and pip-installing mujoco."
+    ),
 )
 @pytest.mark.asyncio
 async def test_multi_robot_isolation() -> None:
