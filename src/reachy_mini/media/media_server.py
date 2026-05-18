@@ -13,6 +13,17 @@ The server is started by the Reachy Mini daemon on **all** platforms
 (Lite and Wireless).  It also provides a ``play_sound()`` method for
 playing sound files directly on the robot's speaker.
 
+Consumer-gated WebRTC branch
+----------------------------
+On platforms with a hardware H.264 encoder (Raspberry Pi, ``imx708``
+camera path) the WebRTC branch consumes ~35 CPU-percentage points even
+when no remote client is watching.  To eliminate this idle cost the
+``queue_webrtc`` tee src pad is blocked by a
+``GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM`` probe as soon as the pipeline
+starts.  The probe is removed (unblocking the pad) when the first
+WebRTC consumer connects, and re-installed when the last consumer
+disconnects.  The IPC branch is completely unaffected by this gating.
+
 Example usage::
 
     >>> from reachy_mini.media.media_server import GstMediaServer
@@ -134,6 +145,15 @@ class GstMediaServer:
         self._pipeline_sender: Optional[Gst.Pipeline] = None
         self._bus_sender: Optional[Gst.Bus] = None
 
+        # WebRTC consumer gate
+        # _active_consumers tracks the number of live WebRTC peers.
+        # _webrtc_branch_pad is the tee → queue_webrtc sink pad; a blocking
+        # probe is installed on it at start() and removed only while at least
+        # one consumer is connected, so the H.264 encoder idles when idle.
+        self._active_consumers: int = 0
+        self._webrtc_branch_pad: Optional[Gst.Pad] = None
+        self._webrtc_block_probe_id: Optional[int] = None
+
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
@@ -194,6 +214,14 @@ class GstMediaServer:
     ) -> None:
         self._logger.info(f"consumer added with peer id: {peer_id}")
 
+        self._active_consumers += 1
+        self._logger.info(
+            f"WebRTC active consumers: {self._active_consumers} (after add)"
+        )
+        if self._active_consumers == 1:
+            # First consumer: unblock the WebRTC branch so frames flow to the encoder.
+            self._remove_webrtc_block_probe()
+
         Gst.debug_bin_to_dot_file(
             self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
         )
@@ -243,6 +271,15 @@ class GstMediaServer:
     ) -> None:
         self._logger.info(f"consumer removed: {peer_id}")
         self._cleanup_incoming_audio(peer_id)
+
+        if self._active_consumers > 0:
+            self._active_consumers -= 1
+        self._logger.info(
+            f"WebRTC active consumers: {self._active_consumers} (after remove)"
+        )
+        if self._active_consumers == 0:
+            # Last consumer gone: block the WebRTC branch to idle the encoder.
+            self._install_webrtc_block_probe()
 
     def _on_consumer_pad_added(
         self,
@@ -473,6 +510,11 @@ class GstMediaServer:
         queue_webrtc = Gst.ElementFactory.make("queue", "queue_webrtc")
         pipeline.add(queue_webrtc)
         tee.link(queue_webrtc)
+
+        # Save the sink pad of queue_webrtc (which is a tee src pad peer) so
+        # that _install_webrtc_block_probe() can gate the branch without
+        # touching the IPC branch.
+        self._webrtc_branch_pad = queue_webrtc.get_static_pad("sink")
 
         if is_rpi:
             # RPi: use hardware H264 encoder (webrtcsink doesn't have v4l2h264enc)
@@ -878,14 +920,65 @@ class GstMediaServer:
 
         return True
 
+    def _install_webrtc_block_probe(self) -> None:
+        """Install a blocking downstream probe on the WebRTC tee pad.
+
+        The probe drops all buffers and events that flow into the WebRTC
+        branch, preventing the H.264 encoder (and ISP proxy) from doing
+        any work.  It is installed at start-up and removed only while at
+        least one WebRTC consumer is connected.
+
+        Must be called after the pipeline has been set to PLAYING so that
+        the pad's peer link is live.  Safe to call even if
+        _webrtc_branch_pad is None (no camera configured).
+        """
+        if self._webrtc_branch_pad is None:
+            return
+        if self._webrtc_block_probe_id is not None:
+            # Already blocked; don't stack a second probe.
+            return
+
+        def _drop_probe(
+            pad: Gst.Pad, info: Gst.PadProbeInfo, _user_data: None
+        ) -> Gst.PadProbeReturn:
+            return Gst.PadProbeReturn.DROP
+
+        self._webrtc_block_probe_id = self._webrtc_branch_pad.add_probe(
+            Gst.PadProbeType.BLOCK_DOWNSTREAM,
+            _drop_probe,
+            None,
+        )
+        self._logger.info(
+            "WebRTC branch blocked (no consumers); "
+            f"probe_id={self._webrtc_block_probe_id}"
+        )
+
+    def _remove_webrtc_block_probe(self) -> None:
+        """Remove the blocking probe from the WebRTC tee pad, unblocking the branch.
+
+        A no-op if no probe is currently installed or the pad is not available.
+        """
+        if self._webrtc_branch_pad is None or self._webrtc_block_probe_id is None:
+            return
+        self._webrtc_branch_pad.remove_probe(self._webrtc_block_probe_id)
+        self._webrtc_block_probe_id = None
+        self._logger.info("WebRTC branch unblocked (consumer connected)")
+
     def start(self) -> None:
         """Rebuild the pipeline from scratch and start it.
 
         Rebuilding ensures a clean state after stop() released all hardware.
         """
         self._logger.debug("Starting WebRTC (rebuilding pipeline)")
+        # Reset consumer gate state; the new pipeline starts with no consumers.
+        self._active_consumers = 0
+        self._webrtc_branch_pad = None
+        self._webrtc_block_probe_id = None
         self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
+        # Block the WebRTC branch immediately; it will be unblocked when the
+        # first consumer connects via _consumer_added().
+        self._install_webrtc_block_probe()
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop(self) -> None:
@@ -893,6 +986,10 @@ class GstMediaServer:
         self._logger.debug("Stopping WebRTC")
         if self._pipeline_sender is not None:
             self._pipeline_sender.set_state(Gst.State.NULL)
+        # Invalidate gate state; the pad and probe belong to the now-dead pipeline.
+        self._webrtc_branch_pad = None
+        self._webrtc_block_probe_id = None
+        self._active_consumers = 0
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.
