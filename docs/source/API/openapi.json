@@ -1118,6 +1118,27 @@
         }
       }
     },
+    "/api/media/ipc-stats": {
+      "get": {
+        "summary": "Media Ipc Stats",
+        "description": "Return IPC frame publisher stats for diagnosing silent stalls.\n\nThe existing ``/media/status`` endpoint reports only a binary\n``available`` flag and cannot distinguish \"media server initialised\nand healthy\" from \"publisher stalled \u2014 no buffers flowing through the\nIPC sink.\"  This endpoint exposes a per-buffer counter and a\nmonotonic timestamp of the last buffer so that callers can detect a\nsilent stall (typical signature: ``available=true``,\n``last_frame_age_s`` keeps growing, ``frames_published`` flatlines).\n\nReturns:\n    ``frames_published``: total buffers passed through the IPC sink\n        since the last pipeline start.\n    ``last_frame_age_s``: seconds since the most-recent buffer, or\n        ``null`` if no buffer has been observed yet.\n    ``publisher_state``: GStreamer pipeline state name\n        (e.g. ``\"GST_STATE_PLAYING\"``).\n    ``socket_path``: platform-specific IPC endpoint path.",
+        "operationId": "media_ipc_stats_api_media_ipc_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Media Ipc Stats Api Media Ipc Stats Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/media/play_sound": {
       "post": {
         "summary": "Play Sound",
