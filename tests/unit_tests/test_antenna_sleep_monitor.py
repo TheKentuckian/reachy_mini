@@ -1,11 +1,19 @@
-"""Unit tests for antenna_sleep_monitor state-machine hardening (issue #22).
+"""Unit tests for antenna_sleep_monitor state-machine hardening.
 
-Tests verify that motor comms errors are handled safely:
+Issue #22 coverage:
 - After an error burst, gesture detection does not re-arm until N consecutive
   good reads have passed (_MOTOR_RECOVERY_READS = 3).
 - Rapid repeated state transitions within _MIN_TRANSITION_INTERVAL_S are
   suppressed.
 - Only the first error in a burst is logged at WARNING level.
+
+Issue #33 coverage:
+- Wake gesture is suppressed when the autostart systemd unit is active.
+- Wake gesture is suppressed when app_manager.current_app is set.
+- Wake gesture still fires when both gates are clean (happy-path regression).
+- After a daemon-initiated motion (wake/sleep), the self-motion cooldown
+  blocks both subsequent wake and sleep gestures for _SELF_MOTION_COOLDOWN_S.
+- The cooldown expires correctly so gestures re-arm after the window.
 """
 
 import asyncio
@@ -16,6 +24,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import uvicorn
 
+from reachy_mini.daemon.app import main as daemon_main
 from reachy_mini.daemon.app.main import Args, create_app
 from reachy_mini.io.protocol import MotorControlMode
 
@@ -230,5 +239,383 @@ async def test_error_burst_log_levels(caplog: pytest.LogCaptureFixture) -> None:
             "Expected subsequent burst errors at DEBUG level, got none"
         )
     finally:
+        backend.get_present_antenna_joint_positions = original_get  # type: ignore[possibly-undefined]
+        await _stop_app(server, thread)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Issue #33: wake-gesture symmetric app-active gate + self-motion cooldown
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+async def _put_to_sleep(backend: Any) -> None:
+    """Move the monitor into sleeping state by disabling motors and waiting
+    one cycle for the awake-flag sync.
+    """
+    backend.set_motor_control_mode(MotorControlMode.Disabled)
+    await asyncio.sleep(0.25)
+
+
+@pytest.mark.asyncio
+async def test_wake_suppressed_when_current_app_set() -> None:
+    """If `app.state.app_manager.current_app` is not None, the wake gesture
+    must not fire even with a held wake-gesture position.
+
+    Scenario for issue #33: an autostart-launched app is up; the daemon
+    drives the head (or a SIGKILL slams it), antennas swing past the wake
+    threshold, and the wake branch would otherwise call
+    _start_autostart_app() again — perpetuating the crash loop.
+    """
+    import numpy as np
+
+    app, server, thread = await _start_app()
+    try:
+        backend = app.state.daemon.backend
+        assert backend is not None
+        await _put_to_sleep(backend)
+
+        # Inject a "running app" sentinel.
+        app.state.app_manager.current_app = MagicMock(name="fake_running_app")
+
+        wake_positions = np.array([-2.0, 2.0], dtype=float)
+        wake_up_called = False
+        original_get = backend.get_present_antenna_joint_positions
+        original_wake_up = backend.wake_up
+
+        async def spy_wake_up() -> None:
+            nonlocal wake_up_called
+            wake_up_called = True
+            await original_wake_up()
+
+        backend.get_present_antenna_joint_positions = lambda: wake_positions
+        backend.wake_up = spy_wake_up
+
+        # Wait well past hold + recovery window — gesture would otherwise fire.
+        await asyncio.sleep(1.2)
+
+        assert not wake_up_called, (
+            "wake_up was called while current_app was set — the wake branch "
+            "is missing its symmetric app-active gate (issue #33)"
+        )
+    finally:
+        app.state.app_manager.current_app = None
+        backend.wake_up = original_wake_up  # type: ignore[possibly-undefined]
+        backend.get_present_antenna_joint_positions = original_get  # type: ignore[possibly-undefined]
+        await _stop_app(server, thread)
+
+
+@pytest.mark.asyncio
+async def test_wake_suppressed_when_autostart_service_active() -> None:
+    """If `systemctl is-active reachy-app-autostart.service` returns 0
+    (service running), the wake gesture must not fire.
+
+    Covers the case where the autostart unit has launched an app via systemd
+    but app_manager.current_app is still None (the daemon process is separate
+    from the app process).
+    """
+    import numpy as np
+
+    # Patch the subprocess used by _autostart_service_active to "succeed".
+    async def fake_subprocess_exec(*argv: str, **kwargs: Any) -> Any:
+        # Any systemctl is-active call should report active (rc=0).
+        if argv and argv[0] == "systemctl" and "is-active" in argv:
+            mock_proc = MagicMock()
+            mock_proc.wait = AsyncMock(return_value=0)
+            mock_proc.returncode = 0
+            return mock_proc
+        # All other subprocess calls fall back to the real implementation.
+        return await _real_create_subprocess_exec(*argv, **kwargs)
+
+    _real_create_subprocess_exec = asyncio.create_subprocess_exec
+
+    with patch.object(asyncio, "create_subprocess_exec", side_effect=fake_subprocess_exec):
+        app, server, thread = await _start_app()
+        try:
+            backend = app.state.daemon.backend
+            assert backend is not None
+            await _put_to_sleep(backend)
+
+            wake_positions = np.array([-2.0, 2.0], dtype=float)
+            wake_up_called = False
+            original_get = backend.get_present_antenna_joint_positions
+            original_wake_up = backend.wake_up
+
+            async def spy_wake_up() -> None:
+                nonlocal wake_up_called
+                wake_up_called = True
+                await original_wake_up()
+
+            backend.get_present_antenna_joint_positions = lambda: wake_positions
+            backend.wake_up = spy_wake_up
+
+            # service-active cache refreshes every 1s; wait long enough that at
+            # least one refresh sees the active service AND a full hold timer
+            # would have elapsed.
+            await asyncio.sleep(1.8)
+
+            assert not wake_up_called, (
+                "wake_up was called while autostart service was active — "
+                "wake branch is missing its symmetric service-active gate (issue #33)"
+            )
+        finally:
+            backend.wake_up = original_wake_up  # type: ignore[possibly-undefined]
+            backend.get_present_antenna_joint_positions = original_get  # type: ignore[possibly-undefined]
+            await _stop_app(server, thread)
+
+
+@pytest.mark.asyncio
+async def test_wake_fires_when_both_gates_clean() -> None:
+    """Happy-path regression: with no app running and service inactive, the
+    wake gesture must still fire normally.
+
+    Guards against the issue-#33 fix over-blocking the legitimate use case.
+    """
+    import numpy as np
+
+    app, server, thread = await _start_app()
+    try:
+        backend = app.state.daemon.backend
+        assert backend is not None
+        await _put_to_sleep(backend)
+
+        # Explicitly assert preconditions: both gates are clean in the default
+        # test harness (systemctl returns non-zero on the dev workstation; no
+        # app_manager.current_app is set by mockup_sim).
+        assert app.state.app_manager.current_app is None
+
+        wake_positions = np.array([-2.0, 2.0], dtype=float)
+        wake_up_called = False
+        original_get = backend.get_present_antenna_joint_positions
+        original_wake_up = backend.wake_up
+
+        async def spy_wake_up() -> None:
+            nonlocal wake_up_called
+            wake_up_called = True
+            # Fast no-op so the monitor isn't blocked on the ~4s real animation.
+            return None
+
+        backend.get_present_antenna_joint_positions = lambda: wake_positions
+        backend.wake_up = spy_wake_up
+
+        # 0.9s ≫ recovery gate (0.3s) + hold timer (0.5s).
+        await asyncio.sleep(0.9)
+
+        assert wake_up_called, (
+            "wake_up did NOT fire with both gates clean — the issue-#33 fix "
+            "is over-blocking the legitimate wake path"
+        )
+    finally:
+        backend.wake_up = original_wake_up  # type: ignore[possibly-undefined]
+        backend.get_present_antenna_joint_positions = original_get  # type: ignore[possibly-undefined]
+        await _stop_app(server, thread)
+
+
+async def _fast_noop() -> None:
+    """Async no-op used to replace backend.wake_up / goto_sleep so the monitor
+    loop is not blocked on multi-second real-motion animations during tests.
+    """
+    return None
+
+
+@pytest.mark.asyncio
+async def test_self_motion_cooldown_blocks_subsequent_sleep_gesture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After a wake_up fires, the self-motion cooldown must block any sleep
+    gesture for _SELF_MOTION_COOLDOWN_S seconds.
+
+    Uses a short cooldown (3s) for test speed.  Verifies that goto_sleep is
+    NOT called during the cooldown window even when sleep-gesture positions
+    are sustained.
+
+    Note: backend.wake_up takes ~4s in mockup_sim because it animates the
+    head; we replace it with a fast no-op so the monitor coroutine isn't
+    blocked during the cooldown window we're trying to observe.
+    """
+    import numpy as np
+
+    monkeypatch.setattr(daemon_main, "_SELF_MOTION_COOLDOWN_S", 3.0)
+
+    app, server, thread = await _start_app()
+    try:
+        backend = app.state.daemon.backend
+        assert backend is not None
+        await _put_to_sleep(backend)
+
+        wake_positions = np.array([-2.0, 2.0], dtype=float)
+        sleep_positions = np.array([-1.0, 1.0], dtype=float)  # squeezed inward
+
+        wake_up_count = 0
+        goto_sleep_count = 0
+        original_get = backend.get_present_antenna_joint_positions
+        original_wake_up = backend.wake_up
+        original_goto_sleep = backend.goto_sleep
+
+        async def spy_wake_up() -> None:
+            nonlocal wake_up_count
+            wake_up_count += 1
+            await _fast_noop()
+
+        async def spy_goto_sleep() -> None:
+            nonlocal goto_sleep_count
+            goto_sleep_count += 1
+            await _fast_noop()
+
+        backend.wake_up = spy_wake_up
+        backend.goto_sleep = spy_goto_sleep
+
+        # Phase 1: hold wake gesture until wake_up fires (~0.9s for 0.5s hold
+        # + 0.3s recovery + jitter).
+        backend.get_present_antenna_joint_positions = lambda: wake_positions
+        await asyncio.sleep(1.1)
+        assert wake_up_count == 1, (
+            f"Test setup failure: expected 1 wake_up, got {wake_up_count}"
+        )
+
+        # Phase 2: immediately switch to sleep-gesture positions.  Cooldown is
+        # 3s; goto_sleep must NOT fire during this window.  Sample at 1.5s
+        # (well inside the cooldown, past any normal hold timer).
+        backend.get_present_antenna_joint_positions = lambda: sleep_positions
+        await asyncio.sleep(1.5)
+
+        assert goto_sleep_count == 0, (
+            f"goto_sleep fired during the self-motion cooldown window "
+            f"(count={goto_sleep_count}); cooldown gate is not blocking the "
+            f"sleep branch"
+        )
+    finally:
+        backend.wake_up = original_wake_up  # type: ignore[possibly-undefined]
+        backend.goto_sleep = original_goto_sleep  # type: ignore[possibly-undefined]
+        backend.get_present_antenna_joint_positions = original_get  # type: ignore[possibly-undefined]
+        await _stop_app(server, thread)
+
+
+@pytest.mark.asyncio
+async def test_self_motion_cooldown_expires(monkeypatch: pytest.MonkeyPatch) -> None:
+    """After the cooldown window elapses, gesture detection must re-arm and
+    a sustained sleep gesture must fire goto_sleep.
+
+    Uses a very short cooldown (0.5s) so the test finishes quickly.  Combined
+    with _MIN_TRANSITION_INTERVAL_S (2.0s) we must wait past BOTH windows
+    before the second transition can fire.
+
+    Uses fast no-op spies for wake_up / goto_sleep so the monitor loop is
+    not blocked on the real ~4s wake_up animation.
+    """
+    import numpy as np
+
+    monkeypatch.setattr(daemon_main, "_SELF_MOTION_COOLDOWN_S", 0.5)
+
+    app, server, thread = await _start_app()
+    try:
+        backend = app.state.daemon.backend
+        assert backend is not None
+        await _put_to_sleep(backend)
+
+        wake_positions = np.array([-2.0, 2.0], dtype=float)
+        sleep_positions = np.array([-1.0, 1.0], dtype=float)
+
+        wake_up_count = 0
+        goto_sleep_count = 0
+        original_get = backend.get_present_antenna_joint_positions
+        original_wake_up = backend.wake_up
+        original_goto_sleep = backend.goto_sleep
+
+        async def spy_wake_up() -> None:
+            nonlocal wake_up_count
+            wake_up_count += 1
+            await _fast_noop()
+
+        async def spy_goto_sleep() -> None:
+            nonlocal goto_sleep_count
+            goto_sleep_count += 1
+            await _fast_noop()
+
+        backend.wake_up = spy_wake_up
+        backend.goto_sleep = spy_goto_sleep
+
+        # Phase 1: trigger a wake_up to arm the cooldown.
+        backend.get_present_antenna_joint_positions = lambda: wake_positions
+        await asyncio.sleep(1.1)
+        assert wake_up_count == 1
+
+        # Phase 2: switch to sleep positions and wait past BOTH the cooldown
+        # (0.5s) AND _MIN_TRANSITION_INTERVAL_S (2.0s) AND the hold timer
+        # (0.5s) — generously sample at 3.0s.
+        backend.get_present_antenna_joint_positions = lambda: sleep_positions
+        await asyncio.sleep(3.0)
+
+        assert goto_sleep_count >= 1, (
+            f"goto_sleep did not fire after cooldown expired "
+            f"(count={goto_sleep_count}); cooldown may be sticky"
+        )
+    finally:
+        backend.wake_up = original_wake_up  # type: ignore[possibly-undefined]
+        backend.goto_sleep = original_goto_sleep  # type: ignore[possibly-undefined]
+        backend.get_present_antenna_joint_positions = original_get  # type: ignore[possibly-undefined]
+        await _stop_app(server, thread)
+
+
+@pytest.mark.asyncio
+async def test_self_motion_cooldown_blocks_subsequent_wake_gesture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After goto_sleep fires (sleep gesture), the cooldown must also block
+    a subsequent wake gesture for the cooldown window.
+
+    Symmetric coverage of the cooldown's both-directions guarantee.
+    """
+    import numpy as np
+
+    monkeypatch.setattr(daemon_main, "_SELF_MOTION_COOLDOWN_S", 3.0)
+
+    app, server, thread = await _start_app()
+    try:
+        backend = app.state.daemon.backend
+        assert backend is not None
+        # Start awake (default).  Let the recovery-reads gate open.
+        await asyncio.sleep(0.35)
+
+        sleep_positions = np.array([-1.0, 1.0], dtype=float)
+        wake_positions = np.array([-2.0, 2.0], dtype=float)
+
+        wake_up_count = 0
+        goto_sleep_count = 0
+        original_get = backend.get_present_antenna_joint_positions
+        original_wake_up = backend.wake_up
+        original_goto_sleep = backend.goto_sleep
+
+        async def spy_wake_up() -> None:
+            nonlocal wake_up_count
+            wake_up_count += 1
+            await _fast_noop()
+
+        async def spy_goto_sleep() -> None:
+            nonlocal goto_sleep_count
+            goto_sleep_count += 1
+            await _fast_noop()
+
+        backend.wake_up = spy_wake_up
+        backend.goto_sleep = spy_goto_sleep
+
+        # Phase 1: hold sleep gesture until goto_sleep fires.
+        backend.get_present_antenna_joint_positions = lambda: sleep_positions
+        await asyncio.sleep(1.1)
+        assert goto_sleep_count == 1, (
+            f"Test setup failure: expected 1 goto_sleep, got {goto_sleep_count}"
+        )
+
+        # Phase 2: immediately try a wake gesture — must be cooldown-blocked.
+        backend.get_present_antenna_joint_positions = lambda: wake_positions
+        await asyncio.sleep(1.5)
+
+        assert wake_up_count == 0, (
+            f"wake_up fired during the self-motion cooldown window "
+            f"(count={wake_up_count}); cooldown gate is not blocking the "
+            f"wake branch"
+        )
+    finally:
+        backend.wake_up = original_wake_up  # type: ignore[possibly-undefined]
+        backend.goto_sleep = original_goto_sleep  # type: ignore[possibly-undefined]
         backend.get_present_antenna_joint_positions = original_get  # type: ignore[possibly-undefined]
         await _stop_app(server, thread)
