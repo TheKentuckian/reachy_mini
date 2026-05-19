@@ -9,7 +9,9 @@ the daemon.
 """
 
 import os
+import time
 from pathlib import Path
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -45,6 +47,45 @@ async def media_status(daemon: Daemon = Depends(get_daemon)) -> dict[str, bool]:
         "available": not daemon.media_released and daemon._media_server is not None,
         "released": daemon.media_released,
         "no_media": daemon.no_media,
+    }
+
+
+@router.get("/ipc-stats")
+async def media_ipc_stats(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, Any]:
+    """Return IPC frame publisher stats for diagnosing silent stalls.
+
+    The existing ``/media/status`` endpoint reports only a binary
+    ``available`` flag and cannot distinguish "media server initialised
+    and healthy" from "publisher stalled — no buffers flowing through the
+    IPC sink."  This endpoint exposes a per-buffer counter and a
+    monotonic timestamp of the last buffer so that callers can detect a
+    silent stall (typical signature: ``available=true``,
+    ``last_frame_age_s`` keeps growing, ``frames_published`` flatlines).
+
+    Returns:
+        ``frames_published``: total buffers passed through the IPC sink
+            since the last pipeline start.
+        ``last_frame_age_s``: seconds since the most-recent buffer, or
+            ``null`` if no buffer has been observed yet.
+        ``publisher_state``: GStreamer pipeline state name
+            (e.g. ``"GST_STATE_PLAYING"``).
+        ``socket_path``: platform-specific IPC endpoint path.
+
+    """
+    if daemon._media_server is None:
+        raise HTTPException(status_code=404, detail="Media server not initialised")
+
+    frames, last_time, state = daemon._media_server.get_ipc_stats()
+    age: Optional[float] = (
+        None if last_time is None else max(0.0, time.monotonic() - last_time)
+    )
+    return {
+        "frames_published": frames,
+        "last_frame_age_s": age,
+        "publisher_state": state,
+        "socket_path": daemon._media_server.socket_path,
     }
 
 

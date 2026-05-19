@@ -36,8 +36,10 @@ Example usage::
 import logging
 import os
 import platform
+import threading
+import time
 from threading import Thread
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import gi
 
@@ -153,6 +155,14 @@ class GstMediaServer:
         self._active_consumers: int = 0
         self._webrtc_branch_pad: Optional[Gst.Pad] = None
         self._webrtc_block_probe_id: Optional[int] = None
+
+        # IPC frame-counter state (for /api/media/ipc-stats diagnostics).
+        # _ipc_frames_published is incremented by the pad probe on the unixfdsink
+        # (or win32ipcvideosink) sink pad.  Written from the GStreamer streaming
+        # thread, read from the FastAPI event-loop thread — protected by a lock.
+        self._ipc_stats_lock: threading.Lock = threading.Lock()
+        self._ipc_frames_published: int = 0
+        self._ipc_last_buffer_time: Optional[float] = None
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
@@ -762,6 +772,13 @@ class GstMediaServer:
             videoconvert_ipc.link(capsfilter_ipc)
             capsfilter_ipc.link(ipc_sink)
 
+        # Install a pad probe on the IPC sink's sink pad to count frames.
+        # The probe fires from the GStreamer streaming thread on every buffer;
+        # it increments a counter and records a monotonic timestamp so that
+        # /api/media/ipc-stats can distinguish "media server initialised" from
+        # "frames are actually flowing through the IPC branch."
+        self._install_ipc_frame_probe(ipc_sink)
+
     def _build_rpi_encoder_branch(
         self,
         queue_webrtc: Gst.Element,
@@ -920,6 +937,92 @@ class GstMediaServer:
 
         return True
 
+    def _install_ipc_frame_probe(self, ipc_sink: Gst.Element) -> None:
+        """Install a GST_PAD_PROBE_TYPE_BUFFER probe on the IPC sink pad.
+
+        The probe is non-blocking — it always returns OK so buffers flow
+        through unmodified.  On every buffer it increments
+        ``_ipc_frames_published`` and records a monotonic timestamp in
+        ``_ipc_last_buffer_time``.
+
+        Both counter and timestamp are protected by ``_ipc_stats_lock``
+        because this probe fires from the GStreamer streaming thread while
+        ``get_ipc_stats()`` is called from the FastAPI event-loop thread.
+
+        Exceptions inside the probe are caught and logged; they never
+        propagate into the pipeline.
+        """
+        sink_pad = ipc_sink.get_static_pad("sink")
+        if sink_pad is None:
+            self._logger.warning(
+                "IPC sink has no 'sink' pad; frame counter probe not installed."
+            )
+            return
+
+        def _ipc_buffer_probe(
+            pad: Gst.Pad,
+            info: Gst.PadProbeInfo,
+            _user_data: None,
+        ) -> Gst.PadProbeReturn:
+            try:
+                now = time.monotonic()
+                with self._ipc_stats_lock:
+                    self._ipc_frames_published += 1
+                    self._ipc_last_buffer_time = now
+            except Exception as exc:
+                # Never let a probe handler crash the pipeline.
+                self._logger.debug("IPC frame probe error (ignored): %s", exc)
+            return Gst.PadProbeReturn.OK
+
+        sink_pad.add_probe(
+            Gst.PadProbeType.BUFFER,
+            _ipc_buffer_probe,
+            None,
+        )
+        self._logger.debug("IPC frame counter probe installed on %s", sink_pad)
+
+    def get_ipc_stats(self) -> Tuple[int, Optional[float], str]:
+        """Return IPC publisher statistics for silent-stall diagnostics.
+
+        Returns:
+            A 3-tuple of:
+            - ``frames_published`` (int): total buffers that have passed
+              through the IPC sink pad since the last ``start()`` call.
+            - ``last_buffer_time`` (float | None): ``time.monotonic()``
+              timestamp of the most-recent buffer, or ``None`` if no buffer
+              has been observed yet.
+            - ``publisher_state`` (str): the GStreamer pipeline state name
+              (e.g. ``"GST_STATE_PLAYING"``), or ``"unknown"`` if the
+              pipeline is not yet initialised.
+
+        """
+        with self._ipc_stats_lock:
+            frames = self._ipc_frames_published
+            last_time = self._ipc_last_buffer_time
+
+        if self._pipeline_sender is not None:
+            try:
+                state_return, state, _pending = self._pipeline_sender.get_state(0)
+                publisher_state = state.value_name
+            except Exception:
+                publisher_state = "unknown"
+        else:
+            publisher_state = "unknown"
+
+        return frames, last_time, publisher_state
+
+    @property
+    def socket_path(self) -> str:
+        """Return the IPC socket / pipe path for this platform.
+
+        On Linux/macOS this is the Unix-domain socket path used by
+        ``unixfdsink``.  On Windows it is the named-pipe path used by
+        ``win32ipcvideosink``.
+        """
+        if platform.system() == "Windows":
+            return CAMERA_PIPE_NAME
+        return CAMERA_SOCKET_PATH
+
     def _install_webrtc_block_probe(self) -> None:
         """Install a blocking downstream probe on the WebRTC tee pad.
 
@@ -974,6 +1077,10 @@ class GstMediaServer:
         self._active_consumers = 0
         self._webrtc_branch_pad = None
         self._webrtc_block_probe_id = None
+        # Reset IPC frame counter; the new pipeline installs a fresh probe.
+        with self._ipc_stats_lock:
+            self._ipc_frames_published = 0
+            self._ipc_last_buffer_time = None
         self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         # Block the WebRTC branch immediately; it will be unblocked when the
