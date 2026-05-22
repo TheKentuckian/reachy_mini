@@ -659,6 +659,18 @@ class RobotBackend(Backend):
 
         return errors
 
+    def read_motor_voltage(self) -> float | None:
+        """Read present input voltage (XL330 register 144) from the first responsive motor."""
+        if self.c is None:
+            return None
+        for motor_id in self.name2id.values():
+            try:
+                raw = self.c.async_read_raw_bytes(motor_id, 144, 2)
+                return struct.unpack("<H", bytes(raw))[0] / 10.0
+            except Exception:
+                continue
+        return None
+
     def write_raw_packet(self, packet: bytes) -> bytes:
         """Write a raw packet to the motor controller and return the response.
 
