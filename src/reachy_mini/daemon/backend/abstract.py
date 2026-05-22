@@ -1445,6 +1445,10 @@ class Backend:
             "The method write_raw_packet is only available for the real robot backend."
         )
 
+    def read_motor_voltage(self) -> float | None:
+        """Read present input voltage from the motor bus (volts). Returns None if not supported."""
+        return None
+
     def get_present_passive_joint_positions(self) -> Optional[Dict[str, float]]:
         """Get the present passive joint positions.
 
