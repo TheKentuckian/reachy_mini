@@ -150,11 +150,19 @@ class GstMediaServer:
         # WebRTC consumer gate
         # _active_consumers tracks the number of live WebRTC peers.
         # _webrtc_branch_pad is the tee → queue_webrtc sink pad; a blocking
-        # probe is installed on it at start() and removed only while at least
-        # one consumer is connected, so the H.264 encoder idles when idle.
+        # probe is installed on it once preroll completes and removed only
+        # while at least one consumer is connected, so the H.264 encoder
+        # idles when idle.
+        # _webrtc_gate_pending defers the probe installation until the
+        # pipeline's ASYNC_DONE: installing it during the PAUSED→PLAYING
+        # transition starves the webrtcsink branch of its preroll buffer,
+        # which deadlocks the WHOLE pipeline in PAUSED — the tee's other
+        # branch (camera IPC) then freezes after a single frame and every
+        # on-device camera client sees eternal empty frames.
         self._active_consumers: int = 0
         self._webrtc_branch_pad: Optional[Gst.Pad] = None
         self._webrtc_block_probe_id: Optional[int] = None
+        self._webrtc_gate_pending: bool = False
 
         # IPC frame-counter state (for /api/media/ipc-stats diagnostics).
         # _ipc_frames_published is incremented by the pad probe on the unixfdsink
@@ -935,6 +943,18 @@ class GstMediaServer:
             self._logger.error(f"Error: {err} {debug}")
             return False
 
+        elif t == Gst.MessageType.ASYNC_DONE:
+            # Preroll complete — now the WebRTC branch can be gated without
+            # wedging the pipeline (see start()). Skip when a consumer
+            # connected during the preroll window.
+            if msg.src is self._pipeline_sender and self._webrtc_gate_pending:
+                self._webrtc_gate_pending = False
+                if self._active_consumers == 0:
+                    self._install_webrtc_block_probe()
+                    self._logger.info(
+                        "WebRTC branch blocked after preroll (no consumers)"
+                    )
+
         return True
 
     def _install_ipc_frame_probe(self, ipc_sink: Gst.Element) -> None:
@@ -1083,9 +1103,12 @@ class GstMediaServer:
             self._ipc_last_buffer_time = None
         self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
-        # Block the WebRTC branch immediately; it will be unblocked when the
-        # first consumer connects via _consumer_added().
-        self._install_webrtc_block_probe()
+        # Defer blocking the WebRTC branch until ASYNC_DONE (see
+        # _on_bus_message): every sink — webrtcsink included — must receive
+        # its preroll buffer before the pipeline can reach PLAYING, so
+        # blocking the branch here deadlocks the whole pipeline in PAUSED
+        # and starves the camera IPC branch after a single frame.
+        self._webrtc_gate_pending = True
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop(self) -> None:
@@ -1096,6 +1119,7 @@ class GstMediaServer:
         # Invalidate gate state; the pad and probe belong to the now-dead pipeline.
         self._webrtc_branch_pad = None
         self._webrtc_block_probe_id = None
+        self._webrtc_gate_pending = False
         self._active_consumers = 0
 
     def play_sound(self, sound_file: str) -> None:
