@@ -35,6 +35,7 @@ Example usage via MediaManager::
 """
 
 import os
+import warnings
 from threading import Thread
 from typing import Iterator, Optional
 
@@ -106,7 +107,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._bus_record = self._pipeline_record.get_bus()
         self._bus_record.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_record
         )
 
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -144,7 +145,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._webrtcbin = None
         self._audio_send_ready = False
         self._appsrc = None
-        self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
         self.daemon_url: str = ""  # set by MediaManager for remote sound ops
         self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
         self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
@@ -300,21 +300,23 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self.logger.warning("End-of-stream")
-            return False
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        # webrtcsrc may emit non-fatal errors from its internal
+        # elements (e.g. appsrc not-negotiated when a sendrecv
+        # transceiver has no data to send).  GStreamer wraps the
+        # actual reason as "Internal data stream error." in the
+        # GError, with "not-negotiated" only in the debug string.
+        # These should not tear down the whole pipeline.
+        if msg.type == Gst.MessageType.LATENCY:
+            # A live element (audiomixer/audiotestsrc) is added to the send
+            # chain after the pipeline is already PLAYING; redistribute latency.
+            pipeline.recalculate_latency()
+            return True
+        if msg.type == Gst.MessageType.ERROR:
+            err, _ = msg.parse_error()
             src = msg.src
-
-            # webrtcsrc may emit non-fatal errors from its internal
-            # elements (e.g. appsrc not-negotiated when a sendrecv
-            # transceiver has no data to send).  GStreamer wraps the
-            # actual reason as "Internal data stream error." in the
-            # GError, with "not-negotiated" only in the debug string.
-            # These should not tear down the whole pipeline.
             if (
                 src is not None
                 and src.get_factory() is not None
@@ -326,10 +328,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
             ):
                 self.logger.debug(f"Ignoring non-fatal webrtcsrc internal error: {err}")
                 return True
-
-            self.logger.error(f"Error: {err} {debug}")
-            return False
-        return True
+        return super()._on_bus_message(bus, msg, pipeline)
 
     def open(self) -> None:
         """Start the WebRTC pipeline (both video and audio)."""
@@ -364,7 +363,16 @@ class GstWebRTCClient(CameraBase, AudioBase):
     def _setup_audio_send_chain(self) -> None:
         """Set up the audio send chain through the existing webrtcbin.
 
-        Builds: appsrc → audioconvert → audioresample → opusenc → rtpopuspay → webrtcbin
+        Builds::
+
+            appsrc ─────────┐
+                            ├→ audiomixer → capsfilter → opusenc → rtpopuspay → webrtcbin
+            audiotestsrc ───┘
+
+        A silent ``audiotestsrc`` keeps the ``audiomixer`` producing a
+        continuous output stream between utterances, so the Opus encoder /
+        webrtcbin stay warm (no first-word swallowing) and the RTP stream
+        stays alive across barge-in flushes.
         """
         if self._audio_send_ready:
             return
@@ -401,23 +409,66 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self._audio_send_ready = False
             return
 
-        appsrc = Gst.ElementFactory.make("appsrc")
+        appsrc = Gst.ElementFactory.make("appsrc", "send_appsrc")
         appsrc.set_property("format", Gst.Format.TIME)
         appsrc.set_property("is-live", True)
+        # We stamp the cue-start buffer ourselves; don't let appsrc timestamp.
+        appsrc.set_property("do-timestamp", False)
+
         caps = Gst.Caps.from_string(
             f"audio/x-raw,format=F32LE,channels={self.CHANNELS},rate={self.SAMPLE_RATE},layout=interleaved"
         )
         appsrc.set_property("caps", caps)
 
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
-        opusenc = Gst.ElementFactory.make("opusenc")
+        # Decouple the push thread from the mixer.
+        appsrc_queue = Gst.ElementFactory.make("queue", "send_queue")
+        appsrc_queue.set_property("max-size-time", 0)
+        appsrc_queue.set_property("max-size-buffers", 0)
+        appsrc_queue.set_property("max-size-bytes", 10_000_000)
+
+        audioconvert = Gst.ElementFactory.make("audioconvert", "send_ac")
+        audioresample = Gst.ElementFactory.make("audioresample", "send_ar")
+
+        # Silent live source feeding a second mixer pad — keeps the mixer
+        # producing output continuously so the encoder/webrtcbin stay warm.
+        silence = Gst.ElementFactory.make("audiotestsrc", "send_silence")
+        silence.set_property("is-live", True)
+        silence.set_property("wave", 4)  # silence
+        silence_queue = Gst.ElementFactory.make("queue", "send_silence_queue")
+
+        audiomixer = Gst.ElementFactory.make("audiomixer", "send_mixer")
+
+        # Pin the mixer output to our rate/channels so opusenc/rtpopuspay
+        # advertise sprop-maxcapturerate=SAMPLE_RATE and stereo encoding-params,
+        # matching the negotiated webrtcbin OPUS sink pad. Without this the
+        # mixer can settle on 48 kHz / mono and webrtcbin rejects it
+        # (not-negotiated) the moment audio flows.
+        mixer_caps = Gst.ElementFactory.make("capsfilter", "send_caps")
+        mixer_caps.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"audio/x-raw,rate={self.SAMPLE_RATE},channels={self.CHANNELS}"
+            ),
+        )
+
+        opusenc = Gst.ElementFactory.make("opusenc", "send_opusenc")
         opusenc.set_property("audio-type", "restricted-lowdelay")
         opusenc.set_property("frame-size", 10)
-        rtpopuspay = Gst.ElementFactory.make("rtpopuspay")
+        rtpopuspay = Gst.ElementFactory.make("rtpopuspay", "send_rtppay")
         rtpopuspay.set_property("pt", pt)
 
-        elems = (appsrc, audioconvert, audioresample, opusenc, rtpopuspay)
+        elems = (
+            appsrc,
+            appsrc_queue,
+            audioconvert,
+            audioresample,
+            silence,
+            silence_queue,
+            audiomixer,
+            mixer_caps,
+            opusenc,
+            rtpopuspay,
+        )
 
         target_bin = self._pipeline_record
         for elem in elems:
@@ -429,9 +480,14 @@ class GstWebRTCClient(CameraBase, AudioBase):
                 self._audio_send_ready = False
                 return
 
-        appsrc.link(audioconvert)
+        appsrc.link(appsrc_queue)
+        appsrc_queue.link(audioconvert)
         audioconvert.link(audioresample)
-        audioresample.link(opusenc)
+        audioresample.link(audiomixer)
+        silence.link(silence_queue)
+        silence_queue.link(audiomixer)
+        audiomixer.link(mixer_caps)
+        mixer_caps.link(opusenc)
         opusenc.link(rtpopuspay)
 
         src_pad = rtpopuspay.get_static_pad("src")
@@ -445,6 +501,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
             elem.sync_state_with_parent()
 
         self._appsrc = appsrc
+        # A live element was added after the pipeline reached PLAYING.
+        self._pipeline_record.recalculate_latency()
         self.logger.info("Audio send chain ready (bidirectional audio enabled)")
 
     def start_playing(self) -> None:
@@ -453,7 +511,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def stop_playing(self) -> None:
         """Reset the PTS counter for the send chain and stop daemon-side sound."""
-        self._appsrc_pts = 0
+        self._appsrc_pts = -1
         # Also stop any sound file playing on the daemon's speaker.
         if self.daemon_url:
             try:
@@ -464,9 +522,73 @@ class GstWebRTCClient(CameraBase, AudioBase):
             except Exception as e:
                 self.logger.warning(f"Failed to stop daemon sound: {e}")
 
+    def clear_player(self) -> None:
+        """Drop queued playback audio during barge-in.
+
+        Flushes the local audio *send* chain so any not-yet-sent samples
+        are dropped, then asks the daemon to flush the audio it has
+        already received and queued for the robot's speaker (where the
+        bulk of buffered audio actually sits).
+        """
+        #     Flush only the audio send branch on the SHARED pipeline.
+        #     Send flush events on self._appsrc directly — do NOT pause or
+        #     flush _pipeline_record (it also carries video + recording).
+        if self._appsrc is not None:
+            self._appsrc.send_event(Gst.Event.new_flush_start())
+            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
+            self._appsrc_pts = -1  # re-anchor PTS on next push
+            self.logger.info("Cleared player queue (WebRTC send chain flushed)")
+        else:
+            self.logger.warning("Audio send chain not ready; nothing to flush.")
+
+        if self.daemon_url:
+            try:
+                _requests.post(
+                    f"{self.daemon_url}/api/media/clear_incoming_audio",
+                    timeout=5,
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to clear daemon incoming audio: {e}")
+
     def clear_output_buffer(self) -> None:
-        """No-op (WebRTC send chain does not buffer significantly)."""
-        pass
+        """Use :meth:`clear_player` instead. Deprecated; does nothing."""
+        warnings.warn(
+            "clear_output_buffer() is deprecated; use clear_player().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.logger.warning("clear_output_buffer() is deprecated; use clear_player().")
+
+    def _push_buffer(self, data: npt.NDArray[np.float32]) -> None:
+        """Push one F32LE chunk into the audiomixer-fed send chain.
+
+        The first buffer of a cue (a fresh utterance, detected via the gap
+        heuristic) carries the ``DISCONT`` flag and the current running-time
+        as PTS; follow-up buffers are left untimestamped so the ``audiomixer``
+        places them contiguously by byte offset.
+        """
+        if self._appsrc is None:
+            return
+
+        running_time = self._appsrc.get_current_running_time()
+        duration_ns = (int(data.shape[0]) * Gst.SECOND) // self.SAMPLE_RATE
+        new_cue = running_time > self._appsrc_pts + self.GAP_RESET_NS
+
+        buf = Gst.Buffer.new_wrapped(data.tobytes())
+        if new_cue:
+            buf.set_flags(Gst.BufferFlags.DISCONT)
+            buf.pts = running_time
+            buf.dts = running_time
+            self._appsrc_pts = running_time + duration_ns
+        else:
+            # Leave pts/dts as CLOCK_TIME_NONE — audiomixer treats the buffer
+            # as contiguous and places it by byte offset.
+            self._appsrc_pts += duration_ns
+        # Do not set buf.duration; the mixer derives it from size + caps.
+
+        ret = self._appsrc.push_buffer(buf)
+        if ret != Gst.FlowReturn.OK:
+            self.logger.warning("push_buffer dropped: %s", ret)
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the remote peer via WebRTC.
@@ -476,26 +598,17 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         """
         if self._appsrc is None:
-            return  # send chain not ready yet, silently drop
-
-        num_samples = data.shape[0]
-        duration_ns = (num_samples * Gst.SECOND) // self.SAMPLE_RATE
-
-        buf = Gst.Buffer.new_wrapped(data.tobytes())
-        buf.pts = self._appsrc_pts
-        buf.duration = duration_ns
-        self._appsrc_pts += duration_ns
-
-        self._appsrc.push_buffer(buf)
+            return
+        self._push_buffer(data)
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker via the daemon REST API.
 
         If *sound_file* is a local path that exists on this machine the
-        file is automatically uploaded to the daemon's temporary sound
-        directory (skipping the upload when a file with the same name is
-        already present).  Otherwise the filename is sent as-is and the
-        daemon resolves it from its built-in assets or filesystem.
+        file is uploaded to the daemon's temporary sound directory
+        (overwriting any previous upload with the same basename).
+        Otherwise the filename is sent as-is and the daemon resolves it
+        from its built-in assets or filesystem.
 
         Args:
             sound_file: Absolute local path **or** asset filename
@@ -506,17 +619,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self.logger.error("No daemon URL configured — cannot play sound remotely.")
             return
 
-        # If the file exists on the client, ensure it is uploaded first.
         remote_file = sound_file
         if os.path.isfile(sound_file):
-            filename = os.path.basename(sound_file)
-            remote_files = self.list_sounds()
-            if filename not in remote_files:
-                remote_file = self.upload_sound(sound_file)
-            else:
-                # Already uploaded — ask the daemon to resolve by filename.
-                # The daemon's play_sound checks the temp dir, assets, etc.
-                remote_file = filename
+            remote_file = self.upload_sound(sound_file)
 
         try:
             resp = _requests.post(

@@ -136,6 +136,55 @@ async def stop_sound(
     return {"status": "ok"}
 
 
+@router.post("/clear_incoming_audio")
+async def clear_incoming_audio(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, str]:
+    """Drop audio received from WebRTC clients that is queued for the speaker.
+
+    Used for barge-in so the robot stops speaking already-buffered audio.
+    """
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    backend.clear_incoming_audio()
+    return {"status": "ok"}
+
+
+@router.post("/wobbling/enable")
+async def enable_wobbling(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, str]:
+    """Enable audio-reactive head wobbling.
+
+    When enabled, audio played on the daemon (sounds, incoming WebRTC
+    audio) is analysed and converted into subtle head movements.
+    """
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    if backend._media_server is not None:
+        backend._media_server.enable_wobbling(backend.set_speech_offsets)
+    return {"status": "ok"}
+
+
+@router.post("/wobbling/disable")
+async def disable_wobbling(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, str]:
+    """Disable audio-reactive head wobbling and reset offsets."""
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    if backend._media_server is not None:
+        backend._media_server.disable_wobbling()
+    backend.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+    return {"status": "ok"}
+
+
 @router.post("/sounds/upload")
 async def upload_sound(
     file: UploadFile = File(...),
