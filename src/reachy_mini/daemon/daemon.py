@@ -68,6 +68,8 @@ class Daemon:
             package_version = None
             self.logger.warning("Could not determine daemon version")
 
+        from reachy_mini.utils.hardware_id import get_hardware_id
+
         self._status = DaemonStatus(
             robot_name=robot_name,
             state=DaemonState.NOT_INITIALIZED,
@@ -80,6 +82,7 @@ class Daemon:
             error=None,
             wlan_ip=None,
             version=package_version,
+            hardware_id=get_hardware_id(),
         )
         self.ws_server: "WSServer | None" = None
         self.backend_run_thread: "Thread | None" = None
@@ -212,13 +215,33 @@ class Daemon:
         try:
             from reachy_mini.media.central_signaling_relay import start_central_relay
 
+            # ``transport`` reflects how a remote client physically
+            # reaches this daemon: the Wireless variant runs autonomously
+            # on its onboard CM4 and is reached over Wi-Fi (or LAN); the
+            # Lite variant is plugged into the user's desktop and the
+            # daemon runs there, reached over USB. Keyed off
+            # ``wireless_version`` so the badging follows the robot SKU.
+            transport = "wifi" if self.wireless_version else "usb"
+
             self.logger.info("Starting central signaling relay...")
-            await start_central_relay(
+            relay = await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
+                transport=transport,
                 robot_app_lock=self.robot_app_lock,
             )
             self.logger.info("Central signaling relay started")
+
+            # Wire the negotiation watchdog: when GstMediaServer
+            # detects a stuck WebRTC negotiation (typically libnice
+            # frozen mid-CHECKING), it forwards the failure to central
+            # via the relay so the JS client gets a typed
+            # ``endSession`` instead of a spinner-on-blank-page UX.
+            # See `media_server.set_session_failed_handler`.
+            if self._media_server is not None:
+                self._media_server.set_session_failed_handler(
+                    relay.notify_peer_session_failed
+                )
         except Exception as e:
             self.logger.warning(f"Failed to start central signaling relay: {e}")
 
@@ -238,7 +261,6 @@ class Daemon:
         mockup_sim: bool = False,
         serialport: str = "auto",
         scene: str = "empty",
-        localhost_only: bool = True,
         wake_up_on_start: bool = True,
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
@@ -253,7 +275,6 @@ class Daemon:
             mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to False.
             serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
-            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
@@ -270,7 +291,7 @@ class Daemon:
             return self._status.state
 
         self.logger.info(
-            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
         )
 
         # mockup-sim behaves exactly like a real robot for apps (they open webcam directly)
@@ -278,7 +299,9 @@ class Daemon:
         self._status.simulation_enabled = sim
         self._status.mockup_sim_enabled = mockup_sim
 
-        if not localhost_only:
+        # The wireless version binds all interfaces and advertises its LAN
+        # address; loopback-only configurations have no meaningful wlan_ip.
+        if self.wireless_version:
             self._status.wlan_ip = get_ip_address()
 
         # When no_media is set, override use_audio to False
@@ -291,7 +314,6 @@ class Daemon:
             "headless": headless,
             "use_audio": effective_use_audio,
             "scene": scene,
-            "localhost_only": localhost_only,
         }
 
         self.logger.info("Starting Reachy Mini daemon...")
@@ -368,6 +390,9 @@ class Daemon:
                     if self.backend is not None:
                         with timing_event("daemon.media.attach", backend_mode=backend_mode):
                             self.backend.setup_media_server(self._media_server)
+                            self.backend.set_restart_daemon_callback(
+                                self._spawn_webrtc_restart
+                            )
                     with timing_event("daemon.media.start", backend_mode=backend_mode):
                         self._media_server.start()
 
@@ -573,7 +598,6 @@ class Daemon:
         scene: Optional[str] = None,
         headless: Optional[bool] = None,
         use_audio: Optional[bool] = None,
-        localhost_only: Optional[bool] = None,
         wake_up_on_start: Optional[bool] = None,
         goto_sleep_on_stop: Optional[bool] = None,
     ) -> "DaemonState":
@@ -586,7 +610,6 @@ class Daemon:
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
             use_audio (bool): If True, enable audio. Defaults to None (uses the previous value).
-            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
 
@@ -621,9 +644,6 @@ class Daemon:
                 "use_audio": use_audio
                 if use_audio is not None
                 else self._start_params["use_audio"],
-                "localhost_only": localhost_only
-                if localhost_only is not None
-                else self._start_params["localhost_only"],
                 "wake_up_on_start": wake_up_on_start
                 if wake_up_on_start is not None
                 else False,
@@ -634,6 +654,34 @@ class Daemon:
         raise NotImplementedError(
             "Restarting is only supported when the daemon is in RUNNING or ERROR state."
         )
+
+    def _spawn_webrtc_restart(self) -> None:
+        """Run ``self.restart()`` on a fresh thread.
+
+        Called from the backend's WebRTC ``restart_daemon`` handler to
+        recover from a broken backend state (e.g. a dead motor
+        controller) without forcing a ``systemctl restart`` or a REST
+        round-trip. Mirrors ``bg_job_register.run_command``: a daemon
+        thread starts its own asyncio loop, runs ``restart()``, then
+        exits. We can't reuse the FastAPI background-job registry from
+        here because the backend has no FastAPI ``Request`` context.
+
+        Returns immediately so the caller can flush its DataChannel
+        ack before the WebRTC stack is torn down.
+        """
+        if self._status.state == DaemonState.STOPPED:
+            self.logger.warning(
+                "Ignoring WebRTC restart_daemon: daemon already stopped."
+            )
+            return
+
+        def _run() -> None:
+            try:
+                asyncio.run(self.restart())
+            except Exception as e:
+                self.logger.error(f"WebRTC restart_daemon failed: {e}")
+
+        Thread(target=_run, daemon=True, name="webrtc-restart-daemon").start()
 
     def status(self) -> "DaemonStatus":
         """Get the current status of the Reachy Mini daemon."""

@@ -1,6 +1,8 @@
 - sections:
     - local: index
       title: Reachy Mini
+    - local: vibe-code-with-your-agent
+      title: Vibe code with your agent
     - local: sdk-tutorials
       title: SDK Tutorials
   title: Get Started
@@ -71,6 +73,8 @@
       title: Change Mic FPC Cable
     - local: troubleshooting/spherical_joints_maintenance
       title: Spherical Joints Maintenance
+    - local: troubleshooting/roadmap
+      title: Roadmap
   title: Help and support
 - isExpanded: false
   sections:
@@ -102,9 +106,15 @@
       title: Sound Playback
     - local: examples/sound_record
       title: Sound Recording
+    - local: examples/sound_tts
+      title: Sound TTS (with head wobbling)
     - local: examples/custom_media_manager
       title: Custom Media Manager
   title: Examples
+- sections:
+    - local: integrations/home_assistant
+      title: Home Assistant
+  title: Integrations
 - isExpanded: false
   sections:
     - local: API/reachymini

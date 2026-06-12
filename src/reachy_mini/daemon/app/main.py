@@ -31,6 +31,7 @@ from fastapi.templating import Jinja2Templates
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
     apps,
+    audio_config,
     camera,
     daemon,
     hf_auth,
@@ -101,12 +102,34 @@ class Args:
 
     robot_name: str = "reachy_mini"
 
-    fastapi_host: str = "0.0.0.0"
+    # None means "auto": bind 0.0.0.0 on the wireless version (must be reachable
+    # over Wi-Fi) and 127.0.0.1 everywhere else. See _resolve_bind_host().
+    fastapi_host: str | None = None
     fastapi_port: int = 8000
 
-    localhost_only: bool | None = None
-
     central_relay: bool = False
+
+
+def _resolve_bind_host(args: Args) -> str:
+    """Resolve the address the HTTP API binds to.
+
+    An explicit ``--fastapi-host`` always wins. Otherwise the daemon binds all
+    interfaces only on the wireless version (the robot has to be reachable on
+    the LAN); every other configuration (Lite, desktop, simulation) stays on
+    loopback so the unauthenticated API is not exposed to the network.
+    """
+    if args.fastapi_host:
+        return args.fastapi_host
+    return "0.0.0.0" if args.wireless_version else "127.0.0.1"
+
+
+# Self-motion cooldown for the antenna gesture detector (issue #33).
+# After the daemon itself drives the antennas (goto_sleep / wake_up) or kicks
+# the autostart unit, gesture detection is suspended for this many seconds so
+# the daemon's own motion (or post-SIGKILL head slam) cannot satisfy the
+# wake-gesture threshold and re-fire _start_autostart_app() in a loop.
+# Module-level so tests can monkeypatch it to a short value.
+_SELF_MOTION_COOLDOWN_S = 10.0
 
 
 def create_app(
@@ -115,12 +138,6 @@ def create_app(
     systemd_notifier: SystemdNotifier | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
-    localhost_only = (
-        args.localhost_only
-        if args.localhost_only is not None
-        else (False if args.wireless_version else True)
-    )
-
     _ANTENNA_SLEEP_THRESHOLD = 0.4  # radians — inward from neutral / outward from sleep
     _ANTENNA_SLEEP_HOLD_S = 0.5   # s both antennas must stay displaced
     # Sleep pose constants (must match AbstractBackend.SLEEP_ANTENNAS_JOINT_POSITIONS)
@@ -134,7 +151,11 @@ def create_app(
         dataset_updater_task: asyncio.Task[None] | None = None
         antenna_sleep_task: asyncio.Task[None] | None = None
 
-        mdns = MdnsServiceRegistration(args.robot_name, args.fastapi_port)
+        mdns = MdnsServiceRegistration(
+            args.robot_name,
+            args.fastapi_port,
+            wireless_version=args.wireless_version,
+        )
 
         def preload_with_logging() -> None:
             """Download datasets with logging."""
@@ -230,6 +251,32 @@ def create_app(
             # human antenna gesture cannot repeat faster than this.
             _MIN_TRANSITION_INTERVAL_S = 2.0
             _last_transition_t: float = -999.0
+            # Self-motion cooldown: see module-level _SELF_MOTION_COOLDOWN_S
+            # for the rationale.  We read the constant via the module each
+            # arm call so tests can monkeypatch it to a short value.
+            _self_motion_until: float = 0.0
+
+            def _arm_self_motion_cooldown(reason: str) -> None:
+                """Arm the self-motion cooldown after a daemon-initiated motion.
+
+                Logs INFO once per *new* cooldown window — if the cooldown is
+                already active (e.g. a gesture branch makes two motion calls
+                back-to-back), bump the window silently to avoid log spam.
+                The per-iteration suppression inside the monitor loop is also
+                silent.
+                """
+                nonlocal _self_motion_until
+                t = asyncio.get_event_loop().time()
+                already_active = t < _self_motion_until
+                cooldown_s = _SELF_MOTION_COOLDOWN_S
+                _self_motion_until = t + cooldown_s
+                if not already_active:
+                    logger.info(
+                        "Antenna gesture detection suspended for %.1fs after self-motion (%s)",
+                        cooldown_s,
+                        reason,
+                    )
+
             logger.info("Antenna sleep monitor started")
 
             while True:
@@ -258,6 +305,19 @@ def create_app(
                     if _good_reads_since_error < _MOTOR_RECOVERY_READS:
                         _good_reads_since_error += 1
                         held_since = None
+                        continue
+
+                    # Self-motion cooldown: suppress gesture detection while
+                    # the daemon's own recent motion (or post-kill head slam)
+                    # could still be settling.  Resetting held_since prevents a
+                    # partial hold accumulated before the cooldown started from
+                    # firing the instant the cooldown expires.  We reset
+                    # _motor_error_count inline because `continue` inside the
+                    # try block bypasses the trailing `else` clause; the read
+                    # itself succeeded so the error counter should still clear.
+                    if now < _self_motion_until:
+                        held_since = None
+                        _motor_error_count = 0
                         continue
 
                     if awake:
@@ -295,42 +355,67 @@ def create_app(
                                         except Exception:
                                             logger.warning("Error stopping app during antenna sleep gesture", exc_info=True)
                                         await _stop_autostart_app()
+                                        _arm_self_motion_cooldown("stop autostart")
                                         try:
                                             await backend.goto_sleep()
                                             backend.set_motor_control_mode(MotorControlMode.Disabled)
                                         except Exception:
                                             logger.warning("Error in goto_sleep during antenna gesture", exc_info=True)
+                                        _arm_self_motion_cooldown("goto_sleep")
                                         awake = False
                             else:
                                 held_since = None
                     else:
-                        # Wake gesture: both antennas pushed outward from sleep positions
-                        wake_l = left > _ANTENNA_LEFT_SLEEP + _ANTENNA_SLEEP_THRESHOLD
-                        wake_r = right < _ANTENNA_RIGHT_SLEEP - _ANTENNA_SLEEP_THRESHOLD
-                        if wake_l and wake_r:
-                            if held_since is None:
-                                held_since = now
-                            elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
-                                held_since = None
-                                if now - _last_transition_t < _MIN_TRANSITION_INTERVAL_S:
-                                    logger.warning(
-                                        "Antenna wake gesture suppressed: repeated transition "
-                                        "within %.2fs (last was %.2fs ago)",
-                                        _MIN_TRANSITION_INTERVAL_S,
-                                        now - _last_transition_t,
-                                    )
-                                else:
-                                    _last_transition_t = now
-                                    logger.info("Antenna wake gesture — waking up")
-                                    try:
-                                        backend.set_motor_control_mode(MotorControlMode.Enabled)
-                                        await backend.wake_up()
-                                    except Exception:
-                                        logger.warning("Error in wake_up during antenna gesture", exc_info=True)
-                                    await _start_autostart_app()
-                                    awake = True
-                        else:
+                        # Symmetric to the awake-branch gate (lines above):
+                        # the wake gesture exists for "robot is asleep, no app
+                        # running, human lifts antennas to wake it".  If an
+                        # app is already up — or the autostart unit is active —
+                        # the wake intent is moot and firing wake_up() +
+                        # _start_autostart_app() can self-trigger from a
+                        # daemon-driven motion or post-SIGKILL head slam,
+                        # producing the crash loop in issue #33.  This is the
+                        # common-case path so we log at DEBUG, not WARNING.
+                        if (
+                            _service_active_cache
+                            or app.state.app_manager.current_app is not None
+                        ):
                             held_since = None
+                            logger.debug(
+                                "Antenna wake gesture suppressed: app already active "
+                                "(service_active=%s, current_app=%s)",
+                                _service_active_cache,
+                                app.state.app_manager.current_app,
+                            )
+                        else:
+                            # Wake gesture: both antennas pushed outward from sleep positions
+                            wake_l = left > _ANTENNA_LEFT_SLEEP + _ANTENNA_SLEEP_THRESHOLD
+                            wake_r = right < _ANTENNA_RIGHT_SLEEP - _ANTENNA_SLEEP_THRESHOLD
+                            if wake_l and wake_r:
+                                if held_since is None:
+                                    held_since = now
+                                elif now - held_since >= _ANTENNA_SLEEP_HOLD_S:
+                                    held_since = None
+                                    if now - _last_transition_t < _MIN_TRANSITION_INTERVAL_S:
+                                        logger.warning(
+                                            "Antenna wake gesture suppressed: repeated transition "
+                                            "within %.2fs (last was %.2fs ago)",
+                                            _MIN_TRANSITION_INTERVAL_S,
+                                            now - _last_transition_t,
+                                        )
+                                    else:
+                                        _last_transition_t = now
+                                        logger.info("Antenna wake gesture — waking up")
+                                        try:
+                                            backend.set_motor_control_mode(MotorControlMode.Enabled)
+                                            await backend.wake_up()
+                                        except Exception:
+                                            logger.warning("Error in wake_up during antenna gesture", exc_info=True)
+                                        _arm_self_motion_cooldown("wake_up")
+                                        await _start_autostart_app()
+                                        _arm_self_motion_cooldown("start autostart")
+                                        awake = True
+                            else:
+                                held_since = None
                 except Exception:
                     _motor_error_count += 1
                     if _motor_error_count == 1:
@@ -389,7 +474,6 @@ def create_app(
                             kinematics_engine=args.kinematics_engine,
                             check_collision=args.check_collision,
                             wake_up_on_start=args.wake_up_on_start,
-                            localhost_only=localhost_only,
                             hardware_config_filepath=args.hardware_config_filepath,
                         )
 
@@ -489,6 +573,7 @@ def create_app(
 
     api_routers = (
         ("apps", apps.router),
+        ("audio_config", audio_config.router),
         ("camera", camera.router),
         ("daemon", daemon.router),
         ("hf_auth", hf_auth.router),
@@ -536,9 +621,11 @@ def create_app(
             health_check_event.set()
             return {"status": "ok"}
 
+    # Restrict cross-origin access to local browser tooling; everything else is
+    # same-origin, native, or WebRTC.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # or restrict to your HF domain
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -643,7 +730,7 @@ def run_app(args: Args) -> None:
 
         config = uvicorn.Config(
             app,
-            host=args.fastapi_host,
+            host=_resolve_bind_host(args),
             port=args.fastapi_port,
             log_config=None,  # Don't override Python logging configuration
         )
@@ -923,18 +1010,6 @@ def main() -> None:
     )
     # Server options
     parser.add_argument(
-        "--localhost-only",
-        action="store_true",
-        default=default_args.localhost_only,
-        help="Restrict the server to localhost only (default: True).",
-    )
-    parser.add_argument(
-        "--no-localhost-only",
-        action="store_false",
-        dest="localhost_only",
-        help="Allow the server to listen on all interfaces (default: False).",
-    )
-    parser.add_argument(
         "--central-relay",
         action="store_true",
         default=default_args.central_relay,
@@ -967,6 +1042,10 @@ def main() -> None:
         "--fastapi-host",
         type=str,
         default=default_args.fastapi_host,
+        help=(
+            "Address the HTTP API binds to. Default (unset): 0.0.0.0 on the "
+            "wireless version, 127.0.0.1 otherwise."
+        ),
     )
     parser.add_argument(
         "--fastapi-port",

@@ -324,8 +324,27 @@ class RobotBackend(Backend):
         return self._status
 
     def enable_motors(self) -> None:
-        """Enable the motors by turning the torque on."""
+        """Enable motor torque; pin all targets to present pose first to avoid a snap."""
         assert self.c is not None, "Motor controller not initialized or already closed."
+
+        motor_pos = self.c.get_last_position()
+        present_head_joints = np.array([motor_pos.body_yaw] + motor_pos.stewart)
+        present_antennas = np.array(motor_pos.antennas)
+
+        # Setter clears ik_required so the next IK tick can't overwrite the pin.
+        self.set_target_head_joint_positions(present_head_joints)
+        self.set_target_antenna_joint_positions(present_antennas)
+        # Keep Cartesian target consistent (current_head_pose is FK'd each tick)
+        # so a later body_yaw-only setTarget can't re-arm IK against a stale pose.
+        if self.current_head_pose is not None:
+            self.target_head_pose = self.current_head_pose
+        self.target_body_yaw = float(motor_pos.body_yaw)
+
+        if self._current_head_operation_mode != 0:
+            self.c.set_stewart_platform_position(present_head_joints[1:].tolist())
+            self.c.set_body_rotation(present_head_joints[0])
+        if self._current_antennas_operation_mode != 0:
+            self.c.set_antennas_positions(present_antennas.tolist())
 
         self.c.enable_torque()
         self._torque_enabled = True
@@ -658,6 +677,18 @@ class RobotBackend(Backend):
                 )
 
         return errors
+
+    def read_motor_voltage(self) -> float | None:
+        """Read present input voltage (XL330 register 144) from the first responsive motor."""
+        if self.c is None:
+            return None
+        for motor_id in self.name2id.values():
+            try:
+                raw = self.c.async_read_raw_bytes(motor_id, 144, 2)
+                return struct.unpack("<H", bytes(raw))[0] / 10.0
+            except Exception:
+                continue
+        return None
 
     def write_raw_packet(self, packet: bytes) -> bytes:
         """Write a raw packet to the motor controller and return the response.
