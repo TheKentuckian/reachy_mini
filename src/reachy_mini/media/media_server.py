@@ -269,16 +269,24 @@ class GstMediaServer:
         # branch (camera IPC) then freezes after a single frame and every
         # on-device camera client sees eternal empty frames.
         # REACHY_WEBRTC_CONSUMER_GATE=0 disables the gate entirely. The gate
-        # has a remote-access deadlock: webrtcsink announces itself as a
-        # producer on the signalling server only after codec discovery, which
-        # needs real buffers — but the gate drops all buffers until a
-        # consumer connects, and no consumer can connect to an unannounced
-        # producer. Until the gate learns to wait for producer registration,
-        # it must be off whenever remote WebRTC access (central relay /
-        # mobile app) is in use.
+        # used to have a remote-access deadlock (#50): webrtcsink announces
+        # itself as a producer on the signalling server only after codec
+        # discovery, which needs real buffers — but the gate dropped all
+        # buffers from ASYNC_DONE on, so discovery never finished and no
+        # consumer could ever connect to the unannounced producer. The
+        # install is therefore deferred a further REACHY_WEBRTC_GATE_DELAY_S
+        # (default 15 s; 0 restores the immediate, deadlocking install) so
+        # buffers flow long enough for discovery + registration before the
+        # branch blocks.
         self._consumer_gate_enabled: bool = (
             os.environ.get("REACHY_WEBRTC_CONSUMER_GATE", "1") != "0"
         )
+        try:
+            self._consumer_gate_delay_s: int = max(
+                0, int(os.environ.get("REACHY_WEBRTC_GATE_DELAY_S", "15"))
+            )
+        except ValueError:
+            self._consumer_gate_delay_s = 15
         self._active_consumers: int = 0
         self._webrtc_branch_pad: Optional[Gst.Pad] = None
         self._webrtc_block_probe_id: Optional[int] = None
@@ -1191,12 +1199,47 @@ class GstMediaServer:
             if msg.src is self._pipeline_sender and self._webrtc_gate_pending:
                 self._webrtc_gate_pending = False
                 if self._active_consumers == 0:
-                    self._install_webrtc_block_probe()
-                    self._logger.info(
-                        "WebRTC branch blocked after preroll (no consumers)"
-                    )
+                    if self._consumer_gate_delay_s == 0:
+                        self._install_webrtc_block_probe()
+                        self._logger.info(
+                            "WebRTC branch blocked after preroll (no consumers)"
+                        )
+                    else:
+                        self._schedule_deferred_gate_install()
             return True
         return handle_default_bus_message(self._logger, msg, pipeline)
+
+    def _schedule_deferred_gate_install(self) -> None:
+        """Install the consumer gate after a registration grace window (#50).
+
+        Buffers must flow past preroll long enough for webrtcsink's codec
+        discovery to complete and the producer to register with the
+        signalling server; blocking at ASYNC_DONE starved discovery and the
+        producer never appeared, so no consumer could ever connect. The
+        callback no-ops if the pipeline was rebuilt/stopped in the window
+        (``start()``/``stop()`` reset the pad and probe state) or a consumer
+        connected meanwhile (``consumer-removed`` re-installs the gate on
+        its own when the last consumer leaves).
+        """
+        pipeline_at_schedule = self._pipeline_sender
+
+        def _deferred_install() -> bool:
+            if self._pipeline_sender is not pipeline_at_schedule:
+                return bool(GLib.SOURCE_REMOVE)
+            if self._active_consumers == 0:
+                self._install_webrtc_block_probe()
+                self._logger.info(
+                    "WebRTC branch blocked %ds after preroll "
+                    "(no consumers; producer registration window elapsed)",
+                    self._consumer_gate_delay_s,
+                )
+            return bool(GLib.SOURCE_REMOVE)
+
+        self._logger.info(
+            "WebRTC gate deferred %ds for producer registration (#50)",
+            self._consumer_gate_delay_s,
+        )
+        GLib.timeout_add_seconds(self._consumer_gate_delay_s, _deferred_install)
 
     def _install_ipc_frame_probe(self, ipc_sink: Gst.Element) -> None:
         """Install a GST_PAD_PROBE_TYPE_BUFFER probe on the IPC sink pad.
