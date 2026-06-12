@@ -26,10 +26,16 @@ sudo rfkill unblock wifi
 # so in-place edits here make subsequent `git pull` deploys fail.
 # The switch is read from /etc/reachy-mini/relay.env (or a pre-set
 # REACHY_CENTRAL_RELAY environment variable, e.g. via systemd Environment=).
+# set -a exports everything the file defines, so it doubles as a general
+# daemon env file: any REACHY_* knob placed there (e.g.
+# REACHY_WEBRTC_CONSUMER_GATE=0) reaches the Python process, not just this
+# launcher shell.
 RELAY_ENV_FILE="/etc/reachy-mini/relay.env"
 if [ -f "$RELAY_ENV_FILE" ]; then
+    set -a
     # shellcheck source=/dev/null
     source "$RELAY_ENV_FILE"
+    set +a
 fi
 RELAY_ARGS=()
 if [ "${REACHY_CENTRAL_RELAY:-0}" = "1" ]; then
