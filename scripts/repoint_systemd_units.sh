@@ -53,9 +53,13 @@ WorkingDirectory=$WIRELESS_DIR
 "
 
 if [ -f "$BLUETOOTH_SERVICE" ]; then
+    # Keep the packaged unit's rfkill-unblock + settle wrapper — only the
+    # script path changes (caught on first live run 2026-06-12: a bare
+    # python ExecStart dropped the unblock and would break BLE when
+    # bluetooth comes up soft-blocked).
     write_override reachy-mini-bluetooth "[Service]
 ExecStart=
-ExecStart=/usr/bin/python3 $BLUETOOTH_SERVICE
+ExecStart=/bin/bash -c 'sudo /usr/sbin/rfkill unblock bluetooth && sleep 2 && /usr/bin/python3 $BLUETOOTH_SERVICE'
 "
 else
     echo "SKIP: $BLUETOOTH_SERVICE not in checkout; bluetooth unit untouched"
