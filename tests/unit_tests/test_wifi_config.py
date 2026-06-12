@@ -21,11 +21,22 @@ def _make_fake_nmcli() -> types.ModuleType:
     device_mod.DeviceWifi = object
     conn_mod.Connection = object
 
+    # Upstream's wifi_config imports `from nmcli._exception import
+    # NotExistException`; provide it so the module imports cleanly.
+    exception_mod = types.ModuleType("nmcli._exception")
+
+    class NotExistException(Exception):
+        pass
+
+    exception_mod.NotExistException = NotExistException
+
     sys.modules["nmcli"] = mod
     sys.modules["nmcli.data"] = data_mod
     sys.modules["nmcli.data.device"] = device_mod
     sys.modules["nmcli.data.connection"] = conn_mod
+    sys.modules["nmcli._exception"] = exception_mod
     mod.data = data_mod
+    mod._exception = exception_mod
     data_mod.device = device_mod
     data_mod.connection = conn_mod
     return mod
