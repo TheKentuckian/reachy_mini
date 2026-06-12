@@ -26,6 +26,7 @@ from reachy_mini.io.protocol import (
 )
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
+from ...instrumentation import log_event
 from ..abstract import Backend
 
 
@@ -392,7 +393,7 @@ class RobotBackend(Backend):
         if mode != 0:
             # if the mode is not torque control, we need to set the head joint positions
             # to the current positions to avoid sudden movements
-            motor_pos = self.c.get_last_position()
+            motor_pos = self._read_motor_state()
             self.target_head_joint_positions = np.array(
                 [motor_pos.body_yaw] + motor_pos.stewart
             )
@@ -440,7 +441,7 @@ class RobotBackend(Backend):
                 # if the mode is not torque control, we need to set the head joint positions
                 # to the current positions to avoid sudden movements
                 self.target_antenna_joint_positions = np.array(
-                    self.c.get_last_position().antennas
+                    self._read_motor_state().antennas
                 )
                 self.c.set_antennas_positions(
                     self.target_antenna_joint_positions.tolist()
@@ -451,6 +452,28 @@ class RobotBackend(Backend):
 
             self._current_antennas_operation_mode = mode
 
+    def _read_motor_state(self) -> Any:
+        """Read the latest motor state, instrumenting comms errors (issue #31).
+
+        Wraps ``self.c.get_last_position()`` so transient
+        ``RuntimeError: Motor communication error!`` raises from the Rust
+        binding emit a structured ``motor.comms_error`` event before
+        propagating. Observability only — re-raises so existing callers
+        see the same exception they always did. Aggregated occurrences
+        let us quantify bus-fault frequency without changing behaviour.
+        """
+        assert self.c is not None, "Motor controller not initialized or already closed."
+        try:
+            return self.c.get_last_position()
+        except RuntimeError as e:
+            log_event(
+                "motor.comms_error",
+                "Motor controller raised on get_last_position",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
+            raise
+
     def get_all_joint_positions(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions of the robot.
 
@@ -459,8 +482,7 @@ class RobotBackend(Backend):
                     and the second list is for the antenna joint positions.
 
         """
-        assert self.c is not None, "Motor controller not initialized or already closed."
-        positions = self.c.get_last_position()
+        positions = self._read_motor_state()
 
         yaw = positions.body_yaw
         antennas = positions.antennas
@@ -704,5 +726,3 @@ class RobotBackend(Backend):
 
         result: bytes = bytes(self.c.write_raw_packet(packet))
         return result
-
-
