@@ -31,6 +31,7 @@ from fastapi.templating import Jinja2Templates
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
     apps,
+    audio_config,
     camera,
     daemon,
     hf_auth,
@@ -101,12 +102,25 @@ class Args:
 
     robot_name: str = "reachy_mini"
 
-    fastapi_host: str = "0.0.0.0"
+    # None means "auto": bind 0.0.0.0 on the wireless version (must be reachable
+    # over Wi-Fi) and 127.0.0.1 everywhere else. See _resolve_bind_host().
+    fastapi_host: str | None = None
     fastapi_port: int = 8000
 
-    localhost_only: bool | None = None
-
     central_relay: bool = False
+
+
+def _resolve_bind_host(args: Args) -> str:
+    """Resolve the address the HTTP API binds to.
+
+    An explicit ``--fastapi-host`` always wins. Otherwise the daemon binds all
+    interfaces only on the wireless version (the robot has to be reachable on
+    the LAN); every other configuration (Lite, desktop, simulation) stays on
+    loopback so the unauthenticated API is not exposed to the network.
+    """
+    if args.fastapi_host:
+        return args.fastapi_host
+    return "0.0.0.0" if args.wireless_version else "127.0.0.1"
 
 
 # Self-motion cooldown for the antenna gesture detector (issue #33).
@@ -124,12 +138,6 @@ def create_app(
     systemd_notifier: SystemdNotifier | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
-    localhost_only = (
-        args.localhost_only
-        if args.localhost_only is not None
-        else (False if args.wireless_version else True)
-    )
-
     _ANTENNA_SLEEP_THRESHOLD = 0.4  # radians — inward from neutral / outward from sleep
     _ANTENNA_SLEEP_HOLD_S = 0.5   # s both antennas must stay displaced
     # Sleep pose constants (must match AbstractBackend.SLEEP_ANTENNAS_JOINT_POSITIONS)
@@ -143,7 +151,11 @@ def create_app(
         dataset_updater_task: asyncio.Task[None] | None = None
         antenna_sleep_task: asyncio.Task[None] | None = None
 
-        mdns = MdnsServiceRegistration(args.robot_name, args.fastapi_port)
+        mdns = MdnsServiceRegistration(
+            args.robot_name,
+            args.fastapi_port,
+            wireless_version=args.wireless_version,
+        )
 
         def preload_with_logging() -> None:
             """Download datasets with logging."""
@@ -462,7 +474,6 @@ def create_app(
                             kinematics_engine=args.kinematics_engine,
                             check_collision=args.check_collision,
                             wake_up_on_start=args.wake_up_on_start,
-                            localhost_only=localhost_only,
                             hardware_config_filepath=args.hardware_config_filepath,
                         )
 
@@ -562,6 +573,7 @@ def create_app(
 
     api_routers = (
         ("apps", apps.router),
+        ("audio_config", audio_config.router),
         ("camera", camera.router),
         ("daemon", daemon.router),
         ("hf_auth", hf_auth.router),
@@ -609,9 +621,11 @@ def create_app(
             health_check_event.set()
             return {"status": "ok"}
 
+    # Restrict cross-origin access to local browser tooling; everything else is
+    # same-origin, native, or WebRTC.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # or restrict to your HF domain
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -716,7 +730,7 @@ def run_app(args: Args) -> None:
 
         config = uvicorn.Config(
             app,
-            host=args.fastapi_host,
+            host=_resolve_bind_host(args),
             port=args.fastapi_port,
             log_config=None,  # Don't override Python logging configuration
         )
@@ -996,18 +1010,6 @@ def main() -> None:
     )
     # Server options
     parser.add_argument(
-        "--localhost-only",
-        action="store_true",
-        default=default_args.localhost_only,
-        help="Restrict the server to localhost only (default: True).",
-    )
-    parser.add_argument(
-        "--no-localhost-only",
-        action="store_false",
-        dest="localhost_only",
-        help="Allow the server to listen on all interfaces (default: False).",
-    )
-    parser.add_argument(
         "--central-relay",
         action="store_true",
         default=default_args.central_relay,
@@ -1040,6 +1042,10 @@ def main() -> None:
         "--fastapi-host",
         type=str,
         default=default_args.fastapi_host,
+        help=(
+            "Address the HTTP API binds to. Default (unset): 0.0.0.0 on the "
+            "wireless version, 127.0.0.1 otherwise."
+        ),
     )
     parser.add_argument(
         "--fastapi-port",

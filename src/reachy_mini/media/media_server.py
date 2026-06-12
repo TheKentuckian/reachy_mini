@@ -38,10 +38,12 @@ import os
 import platform
 import threading
 import time
-from threading import Thread
+from dataclasses import dataclass, field
+from threading import Lock, Thread
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import gi
+import numpy as np
 
 from reachy_mini.daemon.utils import (
     CAMERA_PIPE_NAME,
@@ -58,12 +60,73 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
+from reachy_mini.media.gstreamer_utils import handle_default_bus_message
+from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
-from gi.repository import GLib, Gst  # noqa: E402
+from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
+
+# Hard cap on how long a freshly-added consumer is allowed to spend
+# before its `webrtcbin.connection-state` reaches "connected". In a
+# healthy run the negotiation completes in well under a second
+# (offer/answer + a few ICE candidate pairs). Past this deadline,
+# we conclude the negotiation is stuck — the typical culprit is
+# libnice frozen mid-`CHECKING` (a known crash mode of certain
+# libnice versions) or a downstream networking issue we can't see
+# from the daemon. We notify the central so the JS client gets a
+# clean rejection instead of a spinner-on-blank-page UX.
+#
+# 12 s is generous for a healthy negotiation and short enough that
+# the user sees the failure quickly. Tuned conservatively because
+# the daemon has no way to distinguish "slow ICE on a flaky
+# network" from "libnice frozen" — at this duration both are bad.
+ICE_NEGOTIATION_DEADLINE_S = 12
+
+# `reason` strings sent to central via the existing `endSession`
+# message. Picked to be parseable by the JS SDK so a user-facing
+# message can map to a precise cause. See
+# `central_signaling_relay.notify_peer_session_failed` for the
+# wire-level emission.
+SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
+SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
+
+
+@dataclass
+class _PeerWebRTCState:
+    """Live state of a single WebRTC peer's negotiation.
+
+    Used by the watchdog to decide if the session is making progress.
+    Updated on every `notify::*-state` callback fired by webrtcbin.
+    Held under :attr:`GstMediaServer._peer_states_lock` because
+    GStreamer signals can fire on internal threads.
+    """
+
+    peer_id: str
+    ice_state: str = "new"
+    conn_state: str = "new"
+    signaling_state: str = "new"
+    added_at: float = field(default_factory=time.monotonic)
+    # GLib timer source ID (returned by `GLib.timeout_add_seconds`).
+    # Kept so the watchdog can be cancelled if the peer reaches a
+    # terminal state (connected, removed) before the deadline.
+    watchdog_source_id: Optional[int] = None
+    # Whether the failure callback has already fired for this peer.
+    # Prevents double-notification when both `connection-state ==
+    # failed` AND the deadline timer fire close together.
+    failure_notified: bool = False
+
+    def asdict(self) -> Dict[str, Any]:
+        """Build a serialisable snapshot for diagnostics in failure notifications."""
+        return {
+            "peer_id": self.peer_id,
+            "ice_state": self.ice_state,
+            "conn_state": self.conn_state,
+            "signaling_state": self.signaling_state,
+            "elapsed_s": round(time.monotonic() - self.added_at, 2),
+        }
 
 
 class GstMediaServer:
@@ -82,6 +145,29 @@ class GstMediaServer:
         resized_K (npt.NDArray[np.float64]): Camera intrinsic matrix for current resolution.
 
     """
+
+    # Sample rate the wobbler appsink demands; the per-branch audioresample
+    # converts whatever the source produces down to this rate before delivery.
+    WOBBLER_SAMPLE_RATE = 16_000
+
+    # Receive-side jitter buffer depth (ms) for the consumer `webrtcbin`,
+    # i.e. the phone->robot voice leg. Default webrtcbin latency (200ms)
+    # underruns on a jittery Wi-Fi link and the speaker stutters. We trade
+    # a little latency for a steady buffer, capped at 300ms because
+    # end-to-end latency is the metric we watch closest.
+    RX_JITTER_LATENCY_MS = 300
+
+    # Send-side Opus loss resilience for the robot mic -> phone leg (the
+    # audio that feeds the realtime backend / STT). webrtcsink builds the
+    # opusenc with defaults (inband-fec off, packet-loss-percentage 0), so
+    # a dropped mic packet on a jittery Wi-Fi link can only be concealed by
+    # the browser decoder, never reconstructed. We enable in-band FEC and
+    # tell the encoder to budget for this much loss so it ships redundancy.
+    TX_OPUS_FEC_LOSS_PERC = 20
+
+    # Name of the appsrc feeding the incoming-audio playback pipeline; used
+    # both when building the pipeline and when flushing it (clear_incoming_audio).
+    INCOMING_AUDIO_SRC_NAME = "audio_in"
 
     def __init__(
         self,
@@ -137,8 +223,31 @@ class GstMediaServer:
 
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
         self._on_data_message: Optional[Callable[[str, str], None]] = None
+        # Optional callback fired on the GStreamer thread when a peer
+        # leaves; used by the backend to free per-peer resources such
+        # as the journalctl subprocess for a `subscribe_logs` stream.
+        self._on_peer_disconnect: Optional[Callable[[str], None]] = None
+        # Optional callback fired by the ICE negotiation watchdog when
+        # a peer's `webrtcbin` is stuck mid-negotiation (see
+        # `_check_negotiation_deadline`). Wired by the daemon to the
+        # central signaling relay so the JS client gets a typed
+        # `endSession` instead of a spinner. Signature:
+        # `(peer_id, reason, diagnostic_dict) -> None`.
+        self._on_session_failed: Optional[
+            Callable[[str, str, Dict[str, Any]], None]
+        ] = None
+        self._peer_states: Dict[str, _PeerWebRTCState] = {}
+        # GStreamer signals (`notify::*`) can fire on internal threads
+        # owned by webrtcbin / libnice, while consumer-added /
+        # consumer-removed run on the GLib main thread. The state
+        # dict is touched from both, so we take a lock around every
+        # mutation. The critical sections are tiny (a few field
+        # writes) so contention is negligible.
+        self._peer_states_lock = Lock()
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
+        self._head_wobbler: Optional[HeadWobbler] = None
+        self._pipeline_playback: Optional[Gst.Pipeline] = None
 
         # Pipeline is built lazily in start() to avoid doing the work twice:
         # __init__ used to call _build_pipeline() here but start() already
@@ -177,7 +286,7 @@ class GstMediaServer:
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
         self._bus_sender.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_sender
         )
 
         webrtcsink = self._configure_webrtc(self._pipeline_sender)
@@ -219,10 +328,45 @@ class GstMediaServer:
 
         webrtcsink.connect("consumer-added", self._consumer_added)
         webrtcsink.connect("consumer-removed", self._consumer_removed)
+        # Tune the auto-created Opus encoder for the mic->phone leg
+        # (in-band FEC). See `_encoder_setup` / `TX_OPUS_FEC_LOSS_PERC`.
+        webrtcsink.connect("encoder-setup", self._encoder_setup)
 
         pipeline.add(webrtcsink)
 
         return webrtcsink
+
+    def _encoder_setup(
+        self,
+        webrtcsink: Gst.Element,
+        consumer_id: str,
+        pad_name: str,
+        encoder: Gst.Element,
+    ) -> bool:
+        """Configure webrtcsink's auto-created encoder before it runs.
+
+        Fired by ``webrtcsink`` once per consumer encoder. We only touch
+        the Opus audio encoder (the robot mic uplink): enable in-band FEC
+        and budget for packet loss so the encoder ships redundancy that
+        the browser can use to reconstruct dropped mic packets instead of
+        merely concealing them. Returning ``False`` keeps webrtcsink's own
+        default configuration (notably its congestion-controlled bitrate),
+        which does not otherwise touch these two properties.
+        """
+        factory = encoder.get_factory()
+        factory_name = factory.get_name() if factory else ""
+        if factory_name == "opusenc":
+            if encoder.find_property("inband-fec") is not None:
+                encoder.set_property("inband-fec", True)
+            if encoder.find_property("packet-loss-percentage") is not None:
+                encoder.set_property(
+                    "packet-loss-percentage", self.TX_OPUS_FEC_LOSS_PERC
+                )
+            self._logger.info(
+                f"opusenc tuned for {consumer_id}: inband-fec=True, "
+                f"packet-loss-percentage={self.TX_OPUS_FEC_LOSS_PERC}"
+            )
+        return False
 
     def _consumer_added(
         self,
@@ -240,19 +384,32 @@ class GstMediaServer:
             # First consumer: unblock the WebRTC branch so frames flow to the encoder.
             self._remove_webrtc_block_probe()
 
-        Gst.debug_bin_to_dot_file(
-            self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
-        )
+        # Gst.debug_bin_to_dot_file(
+        #     self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
+        # )
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
         self._setup_data_channel(peer_id, webrtcbin)
+
+        # Deepen this consumer's receive jitter buffer before media flows
+        # so transient Wi-Fi jitter on the phone->robot voice leg doesn't
+        # starve the speaker. Must be set on `webrtcbin` here, while it is
+        # still being negotiated, for the internal jitterbuffer to pick it
+        # up. See `RX_JITTER_LATENCY_MS`.
+        webrtcbin.set_property("latency", self.RX_JITTER_LATENCY_MS)
 
         # Make audio bidirectional before SDP offer is generated
         self._enable_audio_receive(webrtcbin)
 
         # Listen for incoming audio pads from the browser (bidirectional audio)
         webrtcbin.connect("pad-added", self._on_consumer_pad_added, peer_id)
+
+        # Watchdog wiring: track ICE / connection / signaling state on
+        # this peer's webrtcbin so we can detect a stuck negotiation
+        # and report it (instead of letting the JS client spin
+        # forever). See `ICE_NEGOTIATION_DEADLINE_S`.
+        self._install_negotiation_watchdog(peer_id, webrtcbin)
 
     # GstWebRTCRTPTransceiverDirection enum values
     _WEBRTC_DIRECTION_SENDRECV = 4
@@ -289,6 +446,16 @@ class GstMediaServer:
     ) -> None:
         self._logger.info(f"consumer removed: {peer_id}")
         self._cleanup_incoming_audio(peer_id)
+        # Cancel any outstanding watchdog for this peer; the consumer
+        # is gone so there's nothing left to police.
+        self._teardown_negotiation_watchdog(peer_id)
+        if self._on_peer_disconnect is not None:
+            try:
+                self._on_peer_disconnect(peer_id)
+            except Exception as e:
+                self._logger.warning(
+                    f"peer-disconnect handler raised for {peer_id}: {e}"
+                )
 
         if self._active_consumers > 0:
             self._active_consumers -= 1
@@ -335,58 +502,102 @@ class GstMediaServer:
         self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
 
         # Build playback pipeline element-by-element
-        playback_pipe = Gst.Pipeline.new(f"audio_playback_{peer_id}")
+        self._pipeline_playback = Gst.Pipeline.new(f"audio_playback_{peer_id}")
 
-        appsrc = Gst.ElementFactory.make("appsrc", "audio_in")
+        sender_clock = self._pipeline_sender.get_pipeline_clock()
+        self._pipeline_playback.use_clock(sender_clock)
+        self._pipeline_playback.set_start_time(Gst.CLOCK_TIME_NONE)
+
+        appsrc = Gst.ElementFactory.make("appsrc", self.INCOMING_AUDIO_SRC_NAME)
         appsrc.set_property("format", Gst.Format.TIME)
         appsrc.set_property("is-live", True)
         appsrc.set_property("caps", caps)
 
         rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
         opusdec = Gst.ElementFactory.make("opusdec")
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
+        # Wi-Fi resilience on the phone->robot voice leg. The browser
+        # encoder emits Opus in-band FEC (a redundant copy of the
+        # previous frame piggybacked on the next packet) and ramps it
+        # with the loss it sees over RTCP; without these two properties
+        # the decoder silently ignores that redundancy and we glitch on
+        # every dropped packet. `use-inband-fec` reconstructs the lost
+        # frame from the next one (one packet of look-ahead, so the
+        # latency cost is ~one frame); `plc` conceals whatever FEC can't
+        # recover. This is the cheapest robustness win on this path.
+        opusdec.set_property("use-inband-fec", True)
+        opusdec.set_property("plc", True)
 
         audiosink = self._build_audiosink_element()
         if audiosink is None:
             self._logger.error("Failed to create audio sink element")
             return
-        audiosink.set_property("sync", False)
+        audiosink.set_property("sync", True)
+
+        # Per-branch audioconvert+audioresample so the wobbler appsink's
+        # F32LE/2/16000 caps don't drag the audiosink branch into a rate
+        # the device can't accept (e.g. wireless XMOS PCM falls back to
+        # IEC958 at non-native rates).
+        tee = Gst.ElementFactory.make("tee")
+        queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
+        queue_wobbler = Gst.ElementFactory.make("queue")
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
+
+        appsink_wobbler = self._make_wobbler_appsink()
 
         for elem in [
             appsrc,
             rtpopusdepay,
             opusdec,
-            audioconvert,
-            audioresample,
+            tee,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
             audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
         ]:
-            playback_pipe.add(elem)
+            self._pipeline_playback.add(elem)
         appsrc.link(rtpopusdepay)
         rtpopusdepay.link(opusdec)
-        opusdec.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(audiosink)
+        opusdec.link(tee)
+        tee.link(queue_speaker)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
+        tee.link(queue_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
 
-        play_bus = playback_pipe.get_bus()
+        play_bus = self._pipeline_playback.get_bus()
         play_bus.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_playback
         )
 
-        playback_pipe.set_state(Gst.State.PLAYING)
+        self._pipeline_playback.set_state(Gst.State.PAUSED)
+        self._pipeline_playback.set_base_time(self._pipeline_sender.get_base_time())
+        self._pipeline_playback.set_state(Gst.State.PLAYING)
 
         # Pad probe: intercept every RTP buffer, forward to the separate
         # playback pipeline, then DROP so webrtcsink's pipeline is unaffected.
         def _buffer_probe(pad: Gst.Pad, info: Gst.PadProbeInfo, _: None) -> int:
             buf = info.get_buffer()
-            if buf is not None:
-                appsrc.emit("push-buffer", buf.copy())
+            appsrc.push_buffer(buf)
             return int(Gst.PadProbeReturn.DROP)
 
         probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
 
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+            self._head_wobbler.start()
+
         self._incoming_audio[peer_id] = {
-            "playback_pipeline": playback_pipe,
+            "playback_pipeline": self._pipeline_playback,
             "probe_id": probe_id,
             "pad": pad,
         }
@@ -420,6 +631,32 @@ class GstMediaServer:
         if playback_pipe is not None:
             playback_pipe.set_state(Gst.State.NULL)
         self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
+
+    def clear_incoming_audio(self) -> None:
+        """Flush queued/rendering audio in the incoming-audio playback pipeline.
+
+        Used for barge-in: drops audio already received from a WebRTC client
+        and queued for the robot's speaker so the robot stops speaking promptly.
+
+        The playback pipeline shares the sender clock + base-time, so incoming
+        buffer PTS live in that shared running-time; we flush with
+        ``reset_time=False`` to keep the timeline intact (``reset_time=True``
+        would strand future-stamped buffers and stall playback). The pad probe
+        keeps pushing new RTP buffers into the appsrc, which resume in sync.
+        """
+        pipeline = self._pipeline_playback
+        if pipeline is None:
+            self._logger.info("No incoming-audio pipeline to clear.")
+            return
+        appsrc = pipeline.get_by_name(self.INCOMING_AUDIO_SRC_NAME)
+        if appsrc is None:
+            self._logger.warning("Incoming-audio appsrc not found; nothing to flush.")
+            return
+        appsrc.send_event(Gst.Event.new_flush_start())
+        appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+        self._logger.info("Flushed incoming audio playback")
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -932,21 +1169,14 @@ class GstMediaServer:
         )
         return Gst.ElementFactory.make("autoaudiosrc")
 
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self._logger.warning("End-of-stream")
-            return False
-
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self._logger.error(f"Error: {err} {debug}")
-            return False
-
-        elif t == Gst.MessageType.ASYNC_DONE:
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        if msg.type == Gst.MessageType.ASYNC_DONE:
             # Preroll complete — now the WebRTC branch can be gated without
             # wedging the pipeline (see start()). Skip when a consumer
-            # connected during the preroll window.
+            # connected during the preroll window. Only the sender pipeline
+            # carries the gate; playback-pipeline ASYNC_DONE is a no-op.
             if msg.src is self._pipeline_sender and self._webrtc_gate_pending:
                 self._webrtc_gate_pending = False
                 if self._active_consumers == 0:
@@ -954,8 +1184,8 @@ class GstMediaServer:
                     self._logger.info(
                         "WebRTC branch blocked after preroll (no consumers)"
                     )
-
-        return True
+            return True
+        return handle_default_bus_message(self._logger, msg, pipeline)
 
     def _install_ipc_frame_probe(self, ipc_sink: Gst.Element) -> None:
         """Install a GST_PAD_PROBE_TYPE_BUFFER probe on the IPC sink pad.
@@ -1144,9 +1374,6 @@ class GstMediaServer:
         else:
             file_path = sound_file
 
-        # Build platform-aware audio sink element
-        audiosink = self._build_audiosink_element()
-
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
 
@@ -1166,8 +1393,11 @@ class GstMediaServer:
             uri = f"file://{file_path}"
 
         playbin.set_property("uri", uri)
-        if audiosink is not None:
-            playbin.set_property("audio-sink", audiosink)
+        playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
+
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+            self._head_wobbler.start()
 
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
@@ -1221,6 +1451,115 @@ class GstMediaServer:
 
         return Gst.ElementFactory.make("autoaudiosink")
 
+    def _make_wobbler_appsink(self) -> Gst.Element:
+        """Create a sync=True appsink that feeds audio to the head wobbler.
+
+        new-sample fires at the buffer's PTS on the pipeline clock —
+        the same instant the audiosink renders that audio.
+        """
+        appsink = Gst.ElementFactory.make("appsink")
+        # Force mono so the speech tapper receives a 1-D float32 array.
+        # The per-branch audioconvert handles the downmix.
+        caps = Gst.Caps.from_string(
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.WOBBLER_SAMPLE_RATE},layout=interleaved"
+        )
+        appsink.set_property("caps", caps)
+        appsink.set_property("drop", True)
+        appsink.set_property("max-buffers", 5)
+        appsink.set_property("sync", True)
+        appsink.set_property("emit-signals", True)
+        appsink.connect("new-sample", self._on_wobbler_sample)
+        return appsink
+
+    def _on_wobbler_sample(self, appsink: Gst.Element) -> Gst.FlowReturn:
+        """GStreamer callback: forward audio buffer to the head wobbler.
+
+        The appsink is sync=True so the callback fires at the buffer's
+        PTS on the pipeline clock — audio is playing NOW.
+        """
+        sample = appsink.pull_sample()
+        if sample is None or self._head_wobbler is None:
+            return Gst.FlowReturn.OK
+        buf = sample.get_buffer()
+        data = buf.extract_dup(0, buf.get_size())
+        pcm = np.frombuffer(data, dtype=np.float32)
+        self._head_wobbler.feed(pcm, time.monotonic_ns())
+        return Gst.FlowReturn.OK
+
+    def _build_audiosink_tee_bin(self) -> Gst.Bin:
+        """Build a Gst.Bin splitting audio to speaker and wobbler appsink.
+
+        Per-branch audioconvert+audioresample isolate each leaf's caps
+        from the other (the wobbler appsink demands F32LE/2/16000; the
+        audiosink wants whatever the device prefers — e.g. on the
+        wireless XMOS PCM, anything but its native rate triggers an
+        IEC958 fallback that fails to open).
+
+        The bin exposes a single ghost sink pad for use as a playbin audio-sink::
+
+            ghost_sink → tee ─┬→ queue → audioconvert → audioresample → audiosink
+                               └→ queue → audioconvert → audioresample → appsink
+        """
+        audio_bin = Gst.Bin.new("audio_tee_bin")
+
+        tee = Gst.ElementFactory.make("tee")
+        queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
+        audiosink = self._build_audiosink_element()
+        queue_wobbler = Gst.ElementFactory.make("queue")
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
+        appsink_wobbler = self._make_wobbler_appsink()
+
+        for el in (
+            tee,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
+            audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
+        ):
+            audio_bin.add(el)
+
+        tee.link(queue_speaker)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
+
+        tee.link(queue_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
+
+        ghost_pad = Gst.GhostPad.new("sink", tee.get_static_pad("sink"))
+        audio_bin.add_pad(ghost_pad)
+
+        return audio_bin
+
+    def enable_wobbling(self, callback: Callable[[SpeechOffsets], None]) -> None:
+        """Enable head wobbling driven by audio playback.
+
+        Args:
+            callback: Called with ``(x_m, y_m, z_m, roll_rad, pitch_rad,
+                yaw_rad)`` for each movement hop.
+
+        """
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+        self._head_wobbler = HeadWobbler(callback, sample_rate=self.WOBBLER_SAMPLE_RATE)
+        self._logger.info("Head wobbler enabled (daemon-side)")
+
+    def disable_wobbling(self) -> None:
+        """Disable head wobbling."""
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+            self._head_wobbler = None
+            self._logger.info("Head wobbler disabled (daemon-side)")
+
     def set_message_handler(
         self,
         handler: Callable[[str, str], None],  # cb(peer_id, message)
@@ -1232,6 +1571,270 @@ class GstMediaServer:
 
         """
         self._on_data_message = handler
+
+    def set_peer_disconnect_handler(
+        self,
+        handler: Callable[[str], None],  # cb(peer_id)
+    ) -> None:
+        """Set a callback fired when a WebRTC peer disconnects.
+
+        The callback runs on the GStreamer/GLib thread (same context as
+        ``_consumer_removed``) so consumers must hop back to their own
+        loop before touching shared state.
+        """
+        self._on_peer_disconnect = handler
+
+    def set_session_failed_handler(
+        self,
+        handler: Callable[[str, str, Dict[str, Any]], None],  # (peer_id, reason, diag)
+    ) -> None:
+        """Set a callback fired when the negotiation watchdog gives up on a peer.
+
+        The callback runs on the GStreamer/GLib thread (or the
+        webrtcbin internal thread for `connection-state == failed`),
+        so consumers must hop back to their own loop before doing I/O.
+        Typical wiring is to forward to the central signaling relay
+        which converts the call into an ``endSession`` message for
+        the JS client.
+
+        Args:
+            handler: ``(peer_id, reason, diagnostic_dict) -> None``.
+                ``reason`` is one of ``SESSION_FAILED_REASON_*``.
+                ``diagnostic_dict`` carries the snapshot of the
+                webrtcbin state at failure time, suitable for logs.
+
+        """
+        self._on_session_failed = handler
+
+    # ------------------------------------------------------------------
+    # ICE negotiation watchdog (see `ICE_NEGOTIATION_DEADLINE_S`).
+    # ------------------------------------------------------------------
+
+    def _install_negotiation_watchdog(
+        self, peer_id: str, webrtcbin: Gst.Element
+    ) -> None:
+        """Subscribe to webrtcbin's state notifications and start the deadline timer.
+
+        Runs on the GLib main thread (called from `_consumer_added`).
+        """
+        state = _PeerWebRTCState(peer_id=peer_id)
+        with self._peer_states_lock:
+            # In theory `consumer-added` fires once per peer_id, but
+            # webrtcsink has been seen to re-add a peer after a brief
+            # disconnect. Drop the previous watchdog if any to avoid
+            # leaking timers.
+            existing = self._peer_states.pop(peer_id, None)
+            if existing is not None and existing.watchdog_source_id is not None:
+                GLib.source_remove(existing.watchdog_source_id)
+            self._peer_states[peer_id] = state
+
+        # `notify::*-state` fires every time the named property
+        # changes, on whatever thread webrtcbin is using internally.
+        # We pass `peer_id` as user data so the handlers don't need
+        # to reverse-lookup the peer from the GObject.
+        webrtcbin.connect(
+            "notify::ice-connection-state",
+            self._on_ice_connection_state_change,
+            peer_id,
+        )
+        webrtcbin.connect(
+            "notify::connection-state",
+            self._on_connection_state_change,
+            peer_id,
+        )
+        webrtcbin.connect(
+            "notify::signaling-state",
+            self._on_signaling_state_change,
+            peer_id,
+        )
+
+        source_id = GLib.timeout_add_seconds(
+            ICE_NEGOTIATION_DEADLINE_S,
+            self._on_negotiation_deadline,
+            peer_id,
+        )
+        with self._peer_states_lock:
+            # The peer might have already been removed in the brief
+            # window above (rare but possible on flaky networks).
+            current = self._peer_states.get(peer_id)
+            if current is state:
+                current.watchdog_source_id = source_id
+            else:
+                # Peer is gone; cancel the timer we just scheduled.
+                GLib.source_remove(source_id)
+
+    def _teardown_negotiation_watchdog(self, peer_id: str) -> None:
+        """Cancel the watchdog timer for `peer_id` and forget its state.
+
+        Called from `_consumer_removed` (peer left cleanly) and from
+        `_check_negotiation_deadline` (we just notified failure).
+        Safe to call twice — the second call is a no-op.
+        """
+        with self._peer_states_lock:
+            state = self._peer_states.pop(peer_id, None)
+        if state is None:
+            return
+        if state.watchdog_source_id is not None:
+            try:
+                GLib.source_remove(state.watchdog_source_id)
+            except Exception:
+                # `source_remove` raises (or returns False, depending
+                # on the binding) if the source has already fired.
+                # That's fine; we just wanted to make sure it's gone.
+                pass
+
+    def _on_ice_connection_state_change(
+        self,
+        webrtcbin: Gst.Element,
+        _pspec: Any,
+        peer_id: str,
+    ) -> None:
+        new_state = self._read_state_nick(webrtcbin, "ice-connection-state")
+        with self._peer_states_lock:
+            state = self._peer_states.get(peer_id)
+            if state is None:
+                return
+            state.ice_state = new_state
+        self._logger.debug(
+            f"[watchdog] peer={peer_id} ice-connection-state -> {new_state}"
+        )
+
+    def _on_signaling_state_change(
+        self,
+        webrtcbin: Gst.Element,
+        _pspec: Any,
+        peer_id: str,
+    ) -> None:
+        new_state = self._read_state_nick(webrtcbin, "signaling-state")
+        with self._peer_states_lock:
+            state = self._peer_states.get(peer_id)
+            if state is None:
+                return
+            state.signaling_state = new_state
+        self._logger.debug(f"[watchdog] peer={peer_id} signaling-state -> {new_state}")
+
+    def _on_connection_state_change(
+        self,
+        webrtcbin: Gst.Element,
+        _pspec: Any,
+        peer_id: str,
+    ) -> None:
+        new_state = self._read_state_nick(webrtcbin, "connection-state")
+        snapshot: Optional[Dict[str, Any]] = None
+        should_notify_failure = False
+        with self._peer_states_lock:
+            state = self._peer_states.get(peer_id)
+            if state is None:
+                return
+            state.conn_state = new_state
+            # `failed` is the terminal "we tried and gave up" state
+            # webrtcbin reaches when ICE check pairs all fail. We
+            # report it eagerly without waiting for the deadline, so
+            # the JS client gets a fast rejection on bad networks.
+            if new_state == "failed" and not state.failure_notified:
+                state.failure_notified = True
+                snapshot = state.asdict()
+                should_notify_failure = True
+
+        self._logger.info(f"[watchdog] peer={peer_id} connection-state -> {new_state}")
+
+        if should_notify_failure and snapshot is not None:
+            self._dispatch_session_failed(
+                peer_id,
+                SESSION_FAILED_REASON_PC_FAILED,
+                snapshot,
+            )
+            self._teardown_negotiation_watchdog(peer_id)
+
+    def _on_negotiation_deadline(self, peer_id: str) -> bool:
+        """Run the watchdog deadline check for ``peer_id``.
+
+        Fired by GLib ``ICE_NEGOTIATION_DEADLINE_S`` seconds after
+        ``consumer-added``. Returns False so GLib drops the source
+        automatically.
+        """
+        snapshot: Optional[Dict[str, Any]] = None
+        is_stuck = False
+        with self._peer_states_lock:
+            state = self._peer_states.get(peer_id)
+            if state is None:
+                # Peer already cleaned up; nothing to do.
+                return False
+            # Connection is healthy if we're connected or completed.
+            # The completed state means ICE has finished checking and
+            # promoted a candidate pair.
+            if state.conn_state in ("connected",) or state.ice_state in (
+                "connected",
+                "completed",
+            ):
+                # All good, but mark the timer as gone so
+                # `_teardown_negotiation_watchdog` doesn't try to
+                # remove an already-fired source.
+                state.watchdog_source_id = None
+                return False
+            if state.failure_notified:
+                # `connection-state == failed` already ran the
+                # callback; don't double-fire.
+                state.watchdog_source_id = None
+                return False
+            state.failure_notified = True
+            state.watchdog_source_id = None
+            snapshot = state.asdict()
+            is_stuck = True
+
+        if is_stuck and snapshot is not None:
+            self._logger.error(
+                f"[watchdog] peer={peer_id} stuck mid-negotiation "
+                f"after {ICE_NEGOTIATION_DEADLINE_S}s, snapshot={snapshot}"
+            )
+            self._dispatch_session_failed(
+                peer_id,
+                SESSION_FAILED_REASON_ICE_TIMEOUT,
+                snapshot,
+            )
+            self._teardown_negotiation_watchdog(peer_id)
+        return False
+
+    def _dispatch_session_failed(
+        self,
+        peer_id: str,
+        reason: str,
+        diagnostic: Dict[str, Any],
+    ) -> None:
+        """Invoke the user-supplied session-failed callback safely.
+
+        Swallows exceptions so a misbehaving handler can't crash the
+        GStreamer bus thread.
+        """
+        handler = self._on_session_failed
+        if handler is None:
+            self._logger.warning(
+                f"[watchdog] peer={peer_id} reason={reason} but no "
+                "session-failed handler is wired; the JS client will "
+                "have to rely on its own timeout"
+            )
+            return
+        try:
+            handler(peer_id, reason, diagnostic)
+        except Exception as e:
+            self._logger.warning(f"session-failed handler raised for {peer_id}: {e}")
+
+    @staticmethod
+    def _read_state_nick(webrtcbin: Gst.Element, prop: str) -> str:
+        """Read a webrtcbin enum property as its short string nick.
+
+        Returns ``"connected"`` instead of
+        ``GstWebRTCICEConnectionState.connected``. Returns ``"unknown"``
+        if introspection fails - we never want a diagnostic helper to raise.
+        """
+        try:
+            value = webrtcbin.get_property(prop)
+            nick = getattr(value, "value_nick", None)
+            if isinstance(nick, str) and nick:
+                return nick
+            return str(value)
+        except Exception:
+            return "unknown"
 
     def send_data_message(self, peer_id: Optional[str], message: str) -> None:
         """Send a message to connected peers via data channel.
