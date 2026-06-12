@@ -33,6 +33,7 @@ class _FakeServer:
         import logging
 
         self._logger = logging.getLogger("test_webrtc_consumer_gate")
+        self._consumer_gate_enabled = True
         self._active_consumers = 0
         self._webrtc_branch_pad: object = None
         self._webrtc_block_probe_id: object = None
@@ -137,6 +138,19 @@ class TestPadProbeHelpers:
         self.server._webrtc_branch_pad = None
         _install(self.server)  # type: ignore[arg-type]
         assert self.server._webrtc_block_probe_id is None
+
+    def test_no_probe_when_gate_disabled(self) -> None:
+        """REACHY_WEBRTC_CONSUMER_GATE=0 must make install a no-op.
+
+        With the gate active, webrtcsink never completes codec discovery
+        (the probe drops the buffers discovery needs), so it never announces
+        itself as a producer on the signalling server — and remote consumers
+        can never connect to lift the gate.
+        """
+        self.server._consumer_gate_enabled = False
+        _install(self.server)  # type: ignore[arg-type]
+        assert self.server._webrtc_block_probe_id is None
+        self.pad.add_probe.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

@@ -268,6 +268,17 @@ class GstMediaServer:
         # which deadlocks the WHOLE pipeline in PAUSED — the tee's other
         # branch (camera IPC) then freezes after a single frame and every
         # on-device camera client sees eternal empty frames.
+        # REACHY_WEBRTC_CONSUMER_GATE=0 disables the gate entirely. The gate
+        # has a remote-access deadlock: webrtcsink announces itself as a
+        # producer on the signalling server only after codec discovery, which
+        # needs real buffers — but the gate drops all buffers until a
+        # consumer connects, and no consumer can connect to an unannounced
+        # producer. Until the gate learns to wait for producer registration,
+        # it must be off whenever remote WebRTC access (central relay /
+        # mobile app) is in use.
+        self._consumer_gate_enabled: bool = (
+            os.environ.get("REACHY_WEBRTC_CONSUMER_GATE", "1") != "0"
+        )
         self._active_consumers: int = 0
         self._webrtc_branch_pad: Optional[Gst.Pad] = None
         self._webrtc_block_probe_id: Optional[int] = None
@@ -1285,6 +1296,8 @@ class GstMediaServer:
         the pad's peer link is live.  Safe to call even if
         _webrtc_branch_pad is None (no camera configured).
         """
+        if not self._consumer_gate_enabled:
+            return
         if self._webrtc_branch_pad is None:
             return
         if self._webrtc_block_probe_id is not None:
@@ -1338,7 +1351,11 @@ class GstMediaServer:
         # its preroll buffer before the pipeline can reach PLAYING, so
         # blocking the branch here deadlocks the whole pipeline in PAUSED
         # and starves the camera IPC branch after a single frame.
-        self._webrtc_gate_pending = True
+        self._webrtc_gate_pending = self._consumer_gate_enabled
+        if not self._consumer_gate_enabled:
+            self._logger.info(
+                "WebRTC consumer gate disabled (REACHY_WEBRTC_CONSUMER_GATE=0)"
+            )
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop(self) -> None:
