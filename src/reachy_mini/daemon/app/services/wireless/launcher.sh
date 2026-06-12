@@ -12,6 +12,23 @@ export GST_DEBUG=1
 # Ensure WiFi is not soft-blocked (can happen after a crash or kernel module reload)
 sudo rfkill unblock wifi
 
+# Central signaling relay toggle (default OFF — see COMPATIBILITY.md).
+# Flip with scripts/relay_on.sh / scripts/relay_off.sh ON THE ROBOT instead of
+# editing this file: the robot runs an editable install from a git checkout,
+# so in-place edits here make subsequent `git pull` deploys fail.
+# The switch is read from /etc/reachy-mini/relay.env (or a pre-set
+# REACHY_CENTRAL_RELAY environment variable, e.g. via systemd Environment=).
+RELAY_ENV_FILE="/etc/reachy-mini/relay.env"
+if [ -f "$RELAY_ENV_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$RELAY_ENV_FILE"
+fi
+RELAY_ARGS=()
+if [ "${REACHY_CENTRAL_RELAY:-0}" = "1" ]; then
+    echo "Central signaling relay ENABLED (REACHY_CENTRAL_RELAY=1)"
+    RELAY_ARGS+=(--central-relay)
+fi
+
 # Run Python in unbuffered mode (-u) to ensure logs are immediately forwarded to systemd.
 # exec makes Python the systemd main process for Type=notify and watchdog heartbeats.
-exec python -u -m reachy_mini.daemon.app.main --wireless-version --log-file /tmp/daemon.jsonl
+exec python -u -m reachy_mini.daemon.app.main --wireless-version "${RELAY_ARGS[@]}" --log-file /tmp/daemon.jsonl

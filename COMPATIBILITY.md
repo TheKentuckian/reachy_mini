@@ -10,19 +10,29 @@ All changes are backward-compatible for Python apps and any client connecting ov
 
 The WebRTC central relay is **disabled by default** in this fork (commit `32dac0c0`). All JS apps — including Pollen's published Spaces (`webrtc_example`, `reachy_mini_radio`, `spaceship_game`, etc.) — require it to discover and reach the robot remotely.
 
-**To re-enable**, add `--central-relay` to the daemon launch command in `src/reachy_mini/daemon/app/services/wireless/launcher.sh`:
-
-```diff
--exec python -u -m reachy_mini.daemon.app.main --wireless-version --log-file /tmp/daemon.jsonl
-+exec python -u -m reachy_mini.daemon.app.main --wireless-version --central-relay --log-file /tmp/daemon.jsonl
-```
-
-Then reinstall the service:
+**To toggle it on the robot** (without dirtying the git checkout — the robot
+runs an editable install, so in-place `launcher.sh` edits break `git pull`
+deploys), use the toggle scripts:
 
 ```bash
-sudo cp src/reachy_mini/daemon/app/services/wireless/reachy-mini-daemon.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl restart reachy-mini-daemon
+# ON THE ROBOT
+./scripts/relay_on.sh    # enable relay + restart daemon
+./scripts/relay_off.sh   # disable relay (fork default) + restart daemon
 ```
+
+These write `REACHY_CENTRAL_RELAY=1` (or `0`) to `/etc/reachy-mini/relay.env`,
+which `launcher.sh` sources at daemon start and translates into the
+`--central-relay` CLI flag. The variable can also be set via systemd
+`Environment=` if you prefer. If the file is absent and the variable unset,
+the relay stays **OFF**.
+
+Two things to remember when toggling:
+
+1. A daemon restart does **not** cascade-restart the app — restart any running
+   app (e.g. `reachy-app-autostart`) too, or its SDK websocket stays dead.
+2. Relay ON exposes the camera and bidirectional audio to the internet via the
+   HuggingFace signaling relay whenever an HF token is cached. Turn it back
+   off after testing.
 
 See `agents.local.md` for the reason this was disabled (unattended camera/mic exposure).
 
