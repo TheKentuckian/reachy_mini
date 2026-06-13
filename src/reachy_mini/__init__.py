@@ -1,9 +1,11 @@
 """Reachy Mini SDK."""
 
+from typing import Any
+
 __all__ = ["ReachyMini", "ReachyMiniApp", "__version__"]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Load public SDK objects only when callers ask for them."""
     if name == "ReachyMini":
         from reachy_mini.reachy_mini import ReachyMini

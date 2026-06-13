@@ -9,7 +9,6 @@ managing the robot's state.
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 import signal
@@ -834,7 +833,7 @@ def run_app(args: Args) -> None:
             await server.serve()
             if _daemon_startup_failed:
                 raise RuntimeError(
-                    f"Daemon failed to reach RUNNING state — triggering Restart=on-failure"
+                    "Daemon failed to reach RUNNING state — triggering Restart=on-failure"
                 )
         except KeyboardInterrupt:
             logger.info("Received Ctrl-C, shutting down gracefully.")
