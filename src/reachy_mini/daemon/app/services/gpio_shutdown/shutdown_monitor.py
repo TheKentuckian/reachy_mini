@@ -7,7 +7,6 @@ safe sleep pose before motor power is cut, then halt the system.
 import os
 import signal
 import subprocess
-import sys
 import time
 from subprocess import call
 

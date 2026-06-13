@@ -6,6 +6,7 @@ import os
 import signal
 from dataclasses import dataclass
 from enum import Enum
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
@@ -18,13 +19,13 @@ if TYPE_CHECKING:
     from reachy_mini.daemon.daemon import Daemon
 
 
-def _hf_space():
+def _hf_space() -> ModuleType:
     from .sources import hf_space
 
     return hf_space
 
 
-def _local_common_venv():
+def _local_common_venv() -> ModuleType:
     from .sources import local_common_venv
 
     return local_common_venv
@@ -386,16 +387,19 @@ class AppManager:
         """List available apps for given source kind."""
         if source == SourceKind.HF_SPACE:
             hf_space = _hf_space()
-            return await hf_space.list_all_apps()
+            all_apps: list[AppInfo] = await hf_space.list_all_apps()
+            return all_apps
         elif source == SourceKind.DASHBOARD_SELECTION:
             hf_space = _hf_space()
-            return await hf_space.list_available_apps()
+            available_apps: list[AppInfo] = await hf_space.list_available_apps()
+            return available_apps
         elif source == SourceKind.INSTALLED:
             local_common_venv = _local_common_venv()
-            return await local_common_venv.list_available_apps(
+            installed_apps: list[AppInfo] = await local_common_venv.list_available_apps(
                 wireless_version=self.wireless_version,
                 desktop_app_daemon=self.desktop_app_daemon,
             )
+            return installed_apps
         elif source == SourceKind.LOCAL:
             return []
         else:

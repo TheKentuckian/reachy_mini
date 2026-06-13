@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import numpy.typing as npt
+
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import linear_pose_interpolation
 

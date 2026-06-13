@@ -707,7 +707,7 @@ class RobotBackend(Backend):
         for motor_id in self.name2id.values():
             try:
                 raw = self.c.async_read_raw_bytes(motor_id, 144, 2)
-                return struct.unpack("<H", bytes(raw))[0] / 10.0
+                return float(struct.unpack("<H", bytes(raw))[0]) / 10.0
             except Exception:
                 continue
         return None

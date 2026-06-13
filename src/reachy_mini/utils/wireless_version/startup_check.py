@@ -114,7 +114,7 @@ def _ownership_marker_valid(venvs_dir: Path, pollen_uid: int) -> bool:
 
     try:
         previous = json.loads(marker.read_text())
-        return previous == _ownership_snapshot(venvs_dir, pollen_uid)
+        return bool(previous == _ownership_snapshot(venvs_dir, pollen_uid))
     except (OSError, json.JSONDecodeError):
         return False
 

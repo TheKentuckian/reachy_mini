@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from types import ModuleType
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -39,7 +40,7 @@ class TokenResponse(BaseModel):
     message: str | None = None
 
 
-def _hf_auth():
+def _hf_auth() -> ModuleType:
     from reachy_mini.apps.sources import hf_auth
 
     return hf_auth
@@ -71,7 +72,8 @@ async def save_token(request: TokenRequest) -> TokenResponse:
 async def get_auth_status() -> dict[str, Any]:
     """Check if user is authenticated with HuggingFace."""
     hf_auth = _hf_auth()
-    return hf_auth.check_token_status()
+    status: dict[str, Any] = hf_auth.check_token_status()
+    return status
 
 
 @router.get("/relay-status")
@@ -254,7 +256,7 @@ async def start_oauth(request: Request, use_localhost: bool = False) -> dict[str
         wireless_version = "reachy-mini.local" in host
 
     hf_auth = _hf_auth()
-    result = hf_auth.create_oauth_session(
+    result: dict[str, Any] = hf_auth.create_oauth_session(
         wireless_version=wireless_version,
         use_localhost=use_localhost,
     )
@@ -295,7 +297,8 @@ async def get_oauth_status(session_id: str) -> dict[str, Any]:
     completed authorization.
     """
     hf_auth = _hf_auth()
-    return hf_auth.get_oauth_session_status(session_id)
+    session_status: dict[str, Any] = hf_auth.get_oauth_session_status(session_id)
+    return session_status
 
 
 @router.delete("/oauth/session/{session_id}")

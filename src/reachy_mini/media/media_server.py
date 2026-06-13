@@ -327,6 +327,7 @@ class GstMediaServer:
         self.close()
 
     def _dump_latency(self) -> None:
+        assert self._pipeline_sender is not None
         query = Gst.Query.new_latency()
         self._pipeline_sender.query(query)
         self._logger.info(f"Pipeline latency {query.parse_latency()}")
@@ -523,6 +524,7 @@ class GstMediaServer:
         # Build playback pipeline element-by-element
         self._pipeline_playback = Gst.Pipeline.new(f"audio_playback_{peer_id}")
 
+        assert self._pipeline_sender is not None
         sender_clock = self._pipeline_sender.get_pipeline_clock()
         self._pipeline_playback.use_clock(sender_clock)
         self._pipeline_playback.set_start_time(Gst.CLOCK_TIME_NONE)
@@ -599,6 +601,7 @@ class GstMediaServer:
         )
 
         self._pipeline_playback.set_state(Gst.State.PAUSED)
+        assert self._pipeline_sender is not None
         self._pipeline_playback.set_base_time(self._pipeline_sender.get_base_time())
         self._pipeline_playback.set_state(Gst.State.PLAYING)
 
@@ -1388,6 +1391,7 @@ class GstMediaServer:
             self._ipc_frames_published = 0
             self._ipc_last_buffer_time = None
         self._build_pipeline()
+        assert self._pipeline_sender is not None
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         # Defer blocking the WebRTC branch until ASYNC_DONE (see
         # _on_bus_message): every sink — webrtcsink included — must receive
