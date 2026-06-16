@@ -40,6 +40,10 @@ class MediaBackend(Enum):
         NO_MEDIA: No media devices — headless operation.
         LOCAL: GStreamer IPC camera reader + GStreamer local audio.
             Use when the client runs on the same machine as the daemon.
+        AUDIO_ONLY: GStreamer local audio only — NO camera pipeline.
+            Use when audio I/O is needed on this client but the camera is
+            owned elsewhere (e.g. a separate camera service supplies frames),
+            so the ~5 s GStreamer camera init is skipped on construction.
         WEBRTC: WebRTC streaming from the daemon (camera + audio).
             Use when the client is remote.
         DEFAULT: Alias for LOCAL.
@@ -52,6 +56,7 @@ class MediaBackend(Enum):
 
     NO_MEDIA = "no_media"
     LOCAL = "local"
+    AUDIO_ONLY = "audio_only"
     WEBRTC = "webrtc"
 
     # Primary alias
@@ -162,6 +167,11 @@ class MediaManager:
                     "Using LOCAL backend (GStreamer IPC camera + GStreamer audio)."
                 )
                 self._init_camera(log_level, camera_specs)
+                self._init_audio(log_level)
+            case MediaBackend.AUDIO_ONLY:
+                self.logger.info(
+                    "Using AUDIO_ONLY backend (GStreamer audio; camera skipped)."
+                )
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC streaming backend.")
