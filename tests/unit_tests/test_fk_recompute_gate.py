@@ -4,7 +4,11 @@ the last computation — the short-circuit the docstring already promises. Cuts 
 daemon's idle CPU (FK + scipy Euler ran 50x/sec on a stationary head)."""
 import numpy as np
 
-from reachy_mini.daemon.backend.abstract import _fk_recompute_needed, _fk_skip_active
+from reachy_mini.daemon.backend.abstract import (
+    _fk_recompute_needed,
+    _fk_skip_active,
+    _resolve_control_loop_hz,
+)
 
 POSE = np.eye(4)
 
@@ -23,6 +27,29 @@ def test_fk_skip_active_when_opted_in():
 def test_master_kill_overrides_opt_in():
     # Emergency switch wins even if the feature flag is on.
     assert _fk_skip_active(True, True) is False
+
+
+# --- control-loop frequency knob (opt-in; default = stock 50Hz; master kill) ---
+
+def test_control_hz_defaults_to_stock_when_unset():
+    assert _resolve_control_loop_hz(None, False) == 50.0
+
+
+def test_control_hz_honors_valid_override():
+    assert _resolve_control_loop_hz("30", False) == 30.0
+
+
+def test_control_hz_master_kill_forces_stock():
+    assert _resolve_control_loop_hz("30", True) == 50.0
+
+
+def test_control_hz_clamps_out_of_range():
+    assert _resolve_control_loop_hz("5", False) == 20.0     # below floor
+    assert _resolve_control_loop_hz("999", False) == 100.0  # above ceiling
+
+
+def test_control_hz_invalid_falls_back_to_stock():
+    assert _resolve_control_loop_hz("abc", False) == 50.0
 
 
 def test_first_call_recomputes():

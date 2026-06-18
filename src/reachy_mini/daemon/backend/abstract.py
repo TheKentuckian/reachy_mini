@@ -159,6 +159,31 @@ def _env_flag(name: str, default: bool = False) -> bool:
 _MOTOR_OPTS_KILL_ENV = "REACHY_MINI_MOTOR_OPTS_DISABLE"
 
 
+def _resolve_control_loop_hz(
+    raw: "str | None",
+    motor_opts_disabled: bool,
+    *,
+    default: float = 50.0,
+    lo: float = 20.0,
+    hi: float = 100.0,
+) -> float:
+    """Resolve the motor control-loop frequency (Hz) from an opt-in env value.
+
+    Defaults to the stock ``50.0`` Hz; the master kill (``motor_opts_disabled``)
+    forces stock regardless. A valid override is clamped to ``[lo, hi]`` so a
+    typo can't drive the motor loop to an unsafe rate; an unparseable value falls
+    back to stock. Lowering this is the only real CPU lever on the otherwise
+    native (Rust) control loop, but it changes motor cadence — opt-in + bench-test.
+    """
+    if motor_opts_disabled or raw is None:
+        return default
+    try:
+        hz = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, hz))
+
+
 def _fk_skip_active(fk_skip_flag: bool, motor_opts_disabled: bool) -> bool:
     """Whether the FK-skip optimization is active.
 
