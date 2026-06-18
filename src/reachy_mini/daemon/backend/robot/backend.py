@@ -29,9 +29,9 @@ from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
 from ...instrumentation import log_event
 from ..abstract import (
+    _MOTOR_OPTS_KILL_ENV,
     Backend,
     _env_flag,
-    _MOTOR_OPTS_KILL_ENV,
     _resolve_control_loop_hz,
 )
 
