@@ -8,6 +8,7 @@ This exposes:
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,8 @@ from ..models import AnyPose, DoAInfo, FullState, as_any_pose
 
 if TYPE_CHECKING:
     from ....daemon.backend.abstract import Backend
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/state")
 
@@ -152,8 +155,9 @@ async def ws_full_state(
     await websocket.accept()
     period = 1.0 / frequency
 
-    try:
-        while True:
+    last_err: str | None = None
+    while backend.ready.is_set():
+        try:
             full_state = await get_full_state(
                 with_head_pose=with_head_pose,
                 with_target_head_pose=with_target_head_pose,
@@ -169,6 +173,14 @@ async def ws_full_state(
                 backend=backend,
             )
             await websocket.send_text(full_state.model_dump_json())
-            await asyncio.sleep(period)
-    except WebSocketDisconnect:
-        pass
+            last_err = None
+        except WebSocketDisconnect:
+            break
+        except Exception as e:
+            # transient backend read (e.g. motor comms): skip frame, keep stream
+            # alive; dedup so a persistent fault doesn't spam at stream frequency
+            msg = str(e)
+            if msg != last_err:
+                logger.warning(f"Skipping full-state frame: {msg}")
+                last_err = msg
+        await asyncio.sleep(period)
