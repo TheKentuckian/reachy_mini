@@ -29,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon.app.middleware import MaxBodySizeMiddleware
 from reachy_mini.daemon.app.routers import (
     apps,
     audio_config,
@@ -69,6 +70,11 @@ from reachy_mini.utils.wireless_version.startup_check import (
 
 logger = logging.getLogger(__name__)
 
+# Origins allowed to call the unauthenticated API cross-origin: localhost tooling
+# plus the native app webview schemes (Tauri/Capacitor), which a browser cannot
+# forge, so the drive-by protection of GHSA-p4cp-8gwf-3fgv holds.
+CORS_ORIGIN_REGEX = r"(https?://(localhost|127\.0\.0\.1)(:\d+)?|tauri://localhost|https?://tauri\.localhost|capacitor://localhost)"
+
 
 @dataclass
 class Args:
@@ -97,6 +103,7 @@ class Args:
 
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
+    startup_app: str | None = None  # app name to auto-start after wake-up
     preload_datasets: bool = False
     dataset_update_interval_hours: float = 24.0  # 0 to disable periodic updates
 
@@ -621,11 +628,21 @@ def create_app(
             health_check_event.set()
             return {"status": "ok"}
 
-    # Restrict cross-origin access to local browser tooling; everything else is
-    # same-origin, native, or WebRTC.
+    # Cap the size of sound uploads before the body is read, so a large file
+    # cannot be streamed to disk (see GHSA-m2pc-3q4q-w6jr). Added before CORS
+    # so CORS remains the outermost middleware and even a 413 carries its
+    # headers.
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        max_body_size=media.MAX_SOUND_UPLOAD_BYTES,
+        paths={"/api/media/sounds/upload"},
+    )
+
+    # Restrict cross-origin access to local browser tooling and the native app
+    # webviews (see CORS_ORIGIN_REGEX); everything else is same-origin or WebRTC.
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+        allow_origin_regex=CORS_ORIGIN_REGEX,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -976,6 +993,14 @@ def main() -> None:
         action="store_false",
         dest="wake_up_on_start",
         help="Do not wake up the robot on daemon start (default: False).",
+    )
+    parser.add_argument(
+        "--startup-app",
+        type=str,
+        default=default_args.startup_app,
+        dest="startup_app",
+        help="Name of an app to start automatically after the robot wakes up "
+        "(installed from the catalog first if it isn't already installed).",
     )
     parser.add_argument(
         "--goto-sleep-on-stop",
