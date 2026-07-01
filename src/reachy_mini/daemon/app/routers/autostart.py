@@ -203,8 +203,11 @@ def daemon_autostart_status() -> dict[str, Any]:
 
 @router.post("/restart")
 def restart_service() -> dict[str, Any]:
-    """Safely restart reachy-app-autostart by stopping, resetting failure state,
-    then starting. Avoids the auto-restart race documented in #25."""
+    """Safely restart reachy-app-autostart.
+
+    Stops the unit, resets its failure state, then starts it. Avoids the
+    auto-restart race documented in #25.
+    """
     _UNIT = "reachy-app-autostart.service"
 
     stages: list[dict[str, Any]] = []

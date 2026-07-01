@@ -197,6 +197,16 @@ class GstMediaServer:
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
+        # Camera gate (backwards-compatible; default ON). When
+        # REACHY_MINI_CAMERA_ENABLED=0, skip camera capture + the entire video
+        # branch so voice-only apps (e.g. the Maestro language tutor) don't pay
+        # the camera-capture CPU cost. Audio (mic uplink + playback) is
+        # unaffected. robot_comic doesn't set this var, so its camera keeps
+        # working unchanged. The WebRTC consumer gate already tolerates a None
+        # video pad (see _install_webrtc_block_probe), so an audio-only pipeline
+        # is a supported configuration.
+        self._camera_enabled = os.environ.get("REACHY_MINI_CAMERA_ENABLED", "1").strip() != "0"
+
         match sim_mode:
             case SimulationMode.MUJOCO:
                 cam_path = "use_sim"
@@ -205,7 +215,13 @@ class GstMediaServer:
                 cam_path = "use_mockup_sim"
                 self.camera_specs = GenericWebcamSpecs()
             case SimulationMode.NONE:
-                cam_path, detected_specs = get_video_device()
+                if not self._camera_enabled:
+                    self._logger.warning(
+                        "Camera disabled (REACHY_MINI_CAMERA_ENABLED=0): skipping camera capture."
+                    )
+                    cam_path, detected_specs = "", None
+                else:
+                    cam_path, detected_specs = get_video_device()
                 if detected_specs is None:
                     self._logger.warning(
                         "No camera found. Video will not be available."
@@ -315,7 +331,12 @@ class GstMediaServer:
 
         webrtcsink = self._configure_webrtc(self._pipeline_sender)
 
-        self._configure_video(self._cam_path, self._pipeline_sender, webrtcsink)
+        if self._camera_enabled:
+            self._configure_video(self._cam_path, self._pipeline_sender, webrtcsink)
+        else:
+            self._logger.info(
+                "Camera disabled (REACHY_MINI_CAMERA_ENABLED=0): skipping video branch"
+            )
         self._configure_audio(self._pipeline_sender, webrtcsink)
 
         self._logger.debug("Pipeline built")
@@ -332,6 +353,7 @@ class GstMediaServer:
         self.close()
 
     def _dump_latency(self) -> None:
+        assert self._pipeline_sender is not None
         query = Gst.Query.new_latency()
         self._pipeline_sender.query(query)
         self._logger.info(f"Pipeline latency {query.parse_latency()}")
@@ -528,6 +550,7 @@ class GstMediaServer:
         # Build playback pipeline element-by-element
         self._pipeline_playback = Gst.Pipeline.new(f"audio_playback_{peer_id}")
 
+        assert self._pipeline_sender is not None
         sender_clock = self._pipeline_sender.get_pipeline_clock()
         self._pipeline_playback.use_clock(sender_clock)
         self._pipeline_playback.set_start_time(Gst.CLOCK_TIME_NONE)
@@ -622,6 +645,7 @@ class GstMediaServer:
         )
 
         self._pipeline_playback.set_state(Gst.State.PAUSED)
+        assert self._pipeline_sender is not None
         self._pipeline_playback.set_base_time(self._pipeline_sender.get_base_time())
         self._pipeline_playback.set_state(Gst.State.PLAYING)
 
@@ -1460,6 +1484,7 @@ class GstMediaServer:
             self._ipc_frames_published = 0
             self._ipc_last_buffer_time = None
         self._build_pipeline()
+        assert self._pipeline_sender is not None
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         # Defer blocking the WebRTC branch until ASYNC_DONE (see
         # _on_bus_message): every sink — webrtcsink included — must receive

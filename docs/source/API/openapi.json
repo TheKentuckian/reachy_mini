@@ -2362,8 +2362,7 @@
           "name",
           "source_kind"
         ],
-        "title": "AppInfo",
-        "description": "Metadata about an app."
+        "title": "AppInfo"
       },
       "AppState": {
         "type": "string",
@@ -2539,7 +2538,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File"
           }
         },

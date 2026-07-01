@@ -146,6 +146,77 @@ def _read_float_env(name: str, default: float, *, min_value: float = 0.0) -> flo
     return value
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Read a truthy env flag (1/true/yes/on)."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# Master emergency switch: when set, ALL of our motor-affecting optimizations are
+# forced off regardless of their individual opt-in flags, so the robot reverts to
+# stock motor behavior. Read by both the daemon (here) and the Maestro app.
+_MOTOR_OPTS_KILL_ENV = "REACHY_MINI_MOTOR_OPTS_DISABLE"
+
+
+def _resolve_control_loop_hz(
+    raw: "str | None",
+    motor_opts_disabled: bool,
+    *,
+    default: float = 50.0,
+    lo: float = 20.0,
+    hi: float = 100.0,
+) -> float:
+    """Resolve the motor control-loop frequency (Hz) from an opt-in env value.
+
+    Defaults to the stock ``50.0`` Hz; the master kill (``motor_opts_disabled``)
+    forces stock regardless. A valid override is clamped to ``[lo, hi]`` so a
+    typo can't drive the motor loop to an unsafe rate; an unparseable value falls
+    back to stock. Lowering this is the only real CPU lever on the otherwise
+    native (Rust) control loop, but it changes motor cadence — opt-in + bench-test.
+    """
+    if motor_opts_disabled or raw is None:
+        return default
+    try:
+        hz = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, hz))
+
+
+def _fk_skip_active(fk_skip_flag: bool, motor_opts_disabled: bool) -> bool:
+    """Whether the FK-skip optimization is active.
+
+    Two-tier motor-safety policy: the optimization is OFF unless explicitly
+    opted in (``fk_skip_flag``), AND the emergency master switch
+    (``motor_opts_disabled``) forces it off regardless. So the daemon always
+    cold-starts into stock FK behavior unless deliberately enabled.
+    """
+    return fk_skip_flag and not motor_opts_disabled
+
+
+def _fk_recompute_needed(
+    head_joint_positions: "NDArray[np.float64]",
+    prev_joint_positions: "NDArray[np.float64] | None",
+    prev_head_pose: "NDArray[np.float64] | None",
+    tolerance: float,
+) -> bool:
+    """Whether forward kinematics must be recomputed for these head joints.
+
+    Returns True (recompute) when there is no cached pose yet, or when the joints
+    differ from the last computed set by more than ``tolerance`` (rad). When the
+    joints are unchanged the cached pose is still valid, so FK + the scipy Euler
+    conversion can be skipped — the daemon's 50 Hz control loop calls this on an
+    essentially-stationary head at idle, so this avoids re-solving the iterative
+    SVD-based FK every tick. Comparing against the last *computed* joints (not the
+    last seen) means slow drift still eventually triggers a recompute.
+    """
+    if prev_joint_positions is None or prev_head_pose is None:
+        return True
+    return not np.allclose(head_joint_positions, prev_joint_positions, atol=tolerance)
+
+
 class _PlaybackCancelToken:
     """Per-run cancellation handle for ``Backend.play_move``.
 
@@ -271,6 +342,13 @@ class Backend:
         # For Forward kinematics (around 0.25deg)
         # - FK is calculated at each timestep and is susceptible to noise
         self._fk_kin_tolerance = 1e-3  # rads
+        # FK-skip optimization (opt-in, default off; honors the master kill).
+        # When active, update_head_kinematics_model reuses the cached pose if the
+        # head joints are unchanged — saves the iterative SVD FK at idle.
+        self._fk_skip_enabled = _fk_skip_active(
+            _env_flag("REACHY_MINI_FK_SKIP_UNCHANGED", default=False),
+            _env_flag(_MOTOR_OPTS_KILL_ENV, default=False),
+        )
         # For Inverse kinematics (around 0.5mm and 0.1 degrees)
         # - IK is calculated only when the head pose is set by the user
         self._ik_kin_tolerance = {
@@ -915,16 +993,27 @@ class Backend:
         if head_joint_positions is None:
             head_joint_positions = self.get_present_head_joint_positions()
 
-        # Compute the forward kinematics to get the current head pose
-        self.current_head_pose = self.head_kinematics.fk(head_joint_positions)
+        # Skip the FK recompute when the head joints are unchanged since the last
+        # computation (the short-circuit this docstring promises) — but only when
+        # the opt-in FK-skip optimization is active (default off; stock behavior
+        # always recomputes). When active, this reuses the cached pose at idle,
+        # avoiding the iterative SVD-based FK + scipy Euler conversion every tick.
+        if (not self._fk_skip_enabled) or _fk_recompute_needed(
+            head_joint_positions,
+            self.current_head_joint_positions,
+            self.current_head_pose,
+            self._fk_kin_tolerance,
+        ):
+            # Compute the forward kinematics to get the current head pose
+            self.current_head_pose = self.head_kinematics.fk(head_joint_positions)
 
-        # Check if the FK was successful
-        assert self.current_head_pose is not None, (
-            "FK failed to compute the current head pose."
-        )
+            # Check if the FK was successful
+            assert self.current_head_pose is not None, (
+                "FK failed to compute the current head pose."
+            )
 
-        # Store the last head joint positions
-        self.current_head_joint_positions = head_joint_positions
+            # Store the last head joint positions
+            self.current_head_joint_positions = head_joint_positions
 
         if antennas_joint_positions is not None:
             self.current_antenna_joint_positions = antennas_joint_positions

@@ -6,6 +6,7 @@ It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 """
 
 import logging
+import os
 import struct
 import time
 from datetime import timedelta
@@ -27,7 +28,12 @@ from reachy_mini.io.protocol import (
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
 from ...instrumentation import log_event
-from ..abstract import Backend
+from ..abstract import (
+    _MOTOR_OPTS_KILL_ENV,
+    Backend,
+    _env_flag,
+    _resolve_control_loop_hz,
+)
 
 
 class RobotBackend(Backend):
@@ -69,7 +75,14 @@ class RobotBackend(Backend):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
 
-        self.control_loop_frequency = 50.0  # Hz
+        # Control-loop frequency: stock 50 Hz unless opted in via
+        # REACHY_MINI_CONTROL_LOOP_HZ (clamped 20-100); the master kill
+        # (REACHY_MINI_MOTOR_OPTS_DISABLE) forces stock. Lowering it reduces the
+        # native serial-loop CPU but changes motor cadence — bench-test first.
+        self.control_loop_frequency = _resolve_control_loop_hz(
+            os.environ.get("REACHY_MINI_CONTROL_LOOP_HZ"),
+            _env_flag(_MOTOR_OPTS_KILL_ENV, default=False),
+        )  # Hz
         self.c: ReachyMiniPyControlLoop | None = ReachyMiniPyControlLoop(
             serialport,
             read_position_loop_period=timedelta(
@@ -707,7 +720,7 @@ class RobotBackend(Backend):
         for motor_id in self.name2id.values():
             try:
                 raw = self.c.async_read_raw_bytes(motor_id, 144, 2)
-                return struct.unpack("<H", bytes(raw))[0] / 10.0
+                return float(struct.unpack("<H", bytes(raw))[0]) / 10.0
             except Exception:
                 continue
         return None
