@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.instrumentation:instrumentation.py:40 Invalid REACHY_DAEMON_INSTRUMENT='surprise', falling back to basic

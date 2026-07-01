@@ -1,0 +1,2176 @@
+{
+  "stats": {
+    "total": 358,
+    "new": 358,
+    "passed": 354,
+    "skipped": 4
+  },
+  "status": "passed",
+  "newTests": [
+    {
+      "id": "b8dc003a7e0881a37d4d0b0f443885af",
+      "name": "test_macos_reachy_camera",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "d88e2c906ede15e7993153f93a765101",
+      "name": "test_release_media_writes_trace_spans",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "9f50dfcc8792f91c79bcbe8d8c7eb64a",
+      "name": "test_analytical_kinematics",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "63cd21c84ac72fd4f055aa4c27752b69",
+      "name": "test_current_backends_no_warning[MediaBackend.WEBRTC]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "f86cbb12743f7be4d428ab3c44473e95",
+      "name": "test_sway_incremental_feeding",
+      "status": "passed",
+      "duration": 5
+    },
+    {
+      "id": "7f65397e124270eb49574f7176ede752",
+      "name": "test_webrtcdsp_starts_when_probe_exists",
+      "status": "skipped",
+      "duration": 0
+    },
+    {
+      "id": "d8eea3d7241167247ff67d261ec10a13",
+      "name": "test_js_command_required_fields_present",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "83e128b429f01fc78e62d66a7e253644",
+      "name": "test_sway_one_second_produces_hops",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "3c909a613b401b84241d8996af9175d0",
+      "name": "test_remove_to_zero",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "3962c6fca4f0660ce8a89364de846dca",
+      "name": "test_release_remote_is_no_op_when_local_held",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "31fd8dbe3f64133ba5861afe11a4fe86",
+      "name": "test_no_wake_during_recovery_reads",
+      "status": "passed",
+      "duration": 7557
+    },
+    {
+      "id": "6926ee2657b449e64eafc8aead2dfeb0",
+      "name": "test_release_media_skip_when_no_server",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "27c55c6ecfd132949086542f84df9555",
+      "name": "test_audio_only_string_resolves",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "53cfb5a90484bbf0a8fde192cfa42ede",
+      "name": "test_macos_device_count",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "479bd3a074c4e1d0611b30d3cfac4b59",
+      "name": "test_wake_suppressed_when_current_app_set",
+      "status": "passed",
+      "duration": 7398
+    },
+    {
+      "id": "4fe0263fe2c063d073d3dff558b4c234",
+      "name": "test_probe_increments_counter",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "a10dbc9cda6764ce1125a41d5730602d",
+      "name": "test_traversal_filename_is_stored_as_basename",
+      "status": "passed",
+      "duration": 10
+    },
+    {
+      "id": "cdedea18366154bfee7ed62dafa524c6",
+      "name": "test_first_call_recomputes",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "394343a97dbbb840a7c2ff4eeeff925e",
+      "name": "test_disallowed_extension_is_rejected",
+      "status": "passed",
+      "duration": 7
+    },
+    {
+      "id": "6c0926f20cc97bbb8e04b3298deaa78c",
+      "name": "test_notify_peer_session_failed_drops_pending_central_session",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "82ba010ad38ec1195391c2bd27319a8c",
+      "name": "test_no_probe_when_gate_disabled",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "f53b19595eac557680684a06cc682668",
+      "name": "test_no_media",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "57617dc956a354c2a1b05e74cd18216a",
+      "name": "test_reconnect_delay_grows_and_is_capped",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "dd39c3f3ae2d30bef4f360b196d124a2",
+      "name": "test_filter_alive_keeps_reachable",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "baae07d5dc2ad5e2a2cf0efbe69b17a4",
+      "name": "test_pipeline_state_forwarded",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "710851abba3f04f9402ccc03eaa1f3c1",
+      "name": "test_discovered_robot_dataclass",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1e5bb657e99b231cc5be0702607b1f59",
+      "name": "test_rapid_wake_transition_suppressed",
+      "status": "passed",
+      "duration": 7923
+    },
+    {
+      "id": "5938b4835c37f1bbd7e62fcb433aea9f",
+      "name": "test_linux_pipewire_reachy_camera",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "7f029e4fca1b863769f69dbb15007292",
+      "name": "test_remote_acquire_refused_while_remote_held",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "3dd0812fa4e0a1be66071f37cce1e883",
+      "name": "test_negotiate_clamps_below_floor",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "ae838af2d635afc603d66336abc8e414",
+      "name": "test_check_and_fix_restore_venv_skips_non_editable",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "098be2eb67b04513de3d21587b34cabe",
+      "name": "test_happy_path_all_stages_succeed",
+      "status": "passed",
+      "duration": 6
+    },
+    {
+      "id": "fbebd493f10f848f8d09615ac272c150",
+      "name": "test_notify_peer_session_failed_no_op_when_session_unknown",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "cf11da22c21605ab0e95147ac0e3996e",
+      "name": "test_pulseaudio_sink",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0e2d8a9f6e632648821be61bec60946a",
+      "name": "test_daemon_client_disconnection",
+      "status": "passed",
+      "duration": 2723
+    },
+    {
+      "id": "5e6ff775bf04e9ab477c8650e9fd5f59",
+      "name": "test_update_info_bounds_payload_to_mtu",
+      "status": "passed",
+      "duration": 67
+    },
+    {
+      "id": "cf74933f27dc7ec260d88b8088362688",
+      "name": "test_empty_device_list",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "e35fbad94ab93ad96609ee07aa248407",
+      "name": "test_sway_deterministic_with_same_seed",
+      "status": "passed",
+      "duration": 6
+    },
+    {
+      "id": "69406868a06d796788284c12819c78d5",
+      "name": "test_find_explicit_override_uses_only_given_ids",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "245d9a4bcf2e8c73496b088b1de86f53",
+      "name": "test_invalid_backend_raises",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "61525120e4f85b7e3b69be31d31e2f60",
+      "name": "test_ice_state_change_updates_tracked_state",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "48cc8b30a77bd5469dadc3a73e605e90",
+      "name": "test_skips_rescan_when_hotspot_active",
+      "status": "passed",
+      "duration": 12
+    },
+    {
+      "id": "5b063d56ed54b91f2abf085643285f22",
+      "name": "test_local_inits_both",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "4213163579dab94abcb45922669cc6dc",
+      "name": "test_zero_distortion[1919.0-1079.0]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "e692088ed962b376edc93bfdcaa84788",
+      "name": "test_set_session_failed_handler_records_callback",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "56c96b0aa9e741f6196d6210f0b61a20",
+      "name": "test_release_local_is_idempotent_when_free",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "9d4f62f6a2345c093bdcdf6b57852c66",
+      "name": "test_negotiate_ignores_non_numeric_recommended",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "46d6d5eea401e6c61799f304b1902db1",
+      "name": "test_js_command_types_exist_in_protocol",
+      "status": "passed",
+      "duration": 4
+    },
+    {
+      "id": "ce9b08a24fd0f20608fcfa38448c2087",
+      "name": "test_negotiate_uses_recommended_when_present",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "06dec7a8dc490a06b9a4efbb5714a7bc",
+      "name": "test_robot_collector_skips_none_info",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "4badc81169b226d537e249086b567524",
+      "name": "test_rms_silence_is_very_negative",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "7e96d531d54eabc9676cc649d5528c50",
+      "name": "test_registered_txt_records_carry_metadata_keys[wireless]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "6f1798e4033ffef00148f1acaf7e5539",
+      "name": "test_install_watchdog_tracks_state_and_schedules_timer",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "ba6726c0499b490207dd346dc6df2c07",
+      "name": "test_macos_source",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "04fa5b6f5e71cca2e3651fc53fac77c1",
+      "name": "test_update_info_requires_job_id",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "2f0af615ade8ea9fdcea5dc1b9278c7b",
+      "name": "test_no_token_in_urls[ts/reachy-mini-sdk.ts]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "7d6391ad4905a2156dbdccaf50940c6e",
+      "name": "test_acquire_media_skip_when_no_server",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "abfa4b6b8924669ae2a86f8d9e353f9c",
+      "name": "test_zero_distortion[0.0-0.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "84e5a9d17c5c83f54bf8d5dae5273cd5",
+      "name": "test_import",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "11f7fc71c525efa93a6e1425c8ee882e",
+      "name": "test_daemon_start_stop",
+      "status": "passed",
+      "duration": 2175
+    },
+    {
+      "id": "ee7ecfe6c2ff3504dbcdc83e45a19141",
+      "name": "test_sway_loud_signal_produces_nonzero",
+      "status": "passed",
+      "duration": 15
+    },
+    {
+      "id": "015a2f96e37b161eb7dc917dcae2ebdf",
+      "name": "test_handler_exception_is_swallowed_and_state_is_local",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "e354c6a27c885affe151ef052452ecff",
+      "name": "test_install_is_idempotent",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "6016a03163c605ed4dc950f86a2d0e41",
+      "name": "test_no_token_in_urls[src/reachy_mini/media/central_signaling_relay.py]",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "050b561099104460f94c8217927cf8e2",
+      "name": "test_get_instrument_mode_defaults_to_basic",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c6737e03ce02c2c6a106bba57eade437",
+      "name": "test_make_aec_caps_chain_emits_s16le_48k",
+      "status": "passed",
+      "duration": 5
+    },
+    {
+      "id": "fbc2f706b3a76b53bf8f7a0bcb805c97",
+      "name": "test_no_token_in_urls[src/reachy_mini/daemon/app/routers/hf_auth.py]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "31e6d0103388a41a0de709f30a9e801d",
+      "name": "test_media_construct_failure_writes_structured_error",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "2af4f917c0fb6958f02ff17de329f2b2",
+      "name": "test_no_matching_device",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "4b5ce990b733aeeea0f40fafaddab81e",
+      "name": "test_empty_device_list",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c03b345aaf569c856bd93514445ed424",
+      "name": "test_correct_pin_connects",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "2c536f9a1c03033af18cbf759a29e3f8",
+      "name": "test_transient_ssid_not_found_then_success",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "404af07af44ec995804497b6229cc8f0",
+      "name": "test_probe_installed_at_start",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "977901c6631c16660ad167e7597c0a92",
+      "name": "test_local_acquire_from_free",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "2e16b55fc3ff4ecdd3dbb51cc87c0c95",
+      "name": "test_find_no_args_falls_back_to_xmos_when_pollen_absent",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "1c593b67183aad397da12ad76c54df01",
+      "name": "test_after_manual_increment",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "3ccb3f18ec1a7ca79f2244483e0a725c",
+      "name": "test_dispatch_no_op_when_handler_unwired",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "ceb6602a635584e5426085aa1ad06053",
+      "name": "test_pipeline_state_exception_falls_back_to_unknown",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "8ffdcbaf1697a1b9d7cad56bf62f1c7e",
+      "name": "test_notify_peer_session_failed_logs_diagnostic_in_record",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "d5aa3328e88c86371d50586da48b1227",
+      "name": "test_get_instrument_mode_parses_known_modes[remote-remote]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "476b39b2245b1f8f26b156ad1b1c0290",
+      "name": "test_arducam_5_coeffs[640.0-360.0]",
+      "status": "passed",
+      "duration": 51
+    },
+    {
+      "id": "d0dec102ea1542fba5fa31b7a933d8c7",
+      "name": "test_current_backends_no_warning[MediaBackend.LOCAL]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "be3a52664f1ba037fe32d4625b97262c",
+      "name": "test_sway_output_keys",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "b3c0b55ab6df2a2967e3ea3e1459163a",
+      "name": "test_negotiate_accepts_int_recommended",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "7fb5e61f7b396349ff78aa8a05f0fa9c",
+      "name": "test_fk_skip_active_when_opted_in",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c39211352aa3a2fa8d9c5b59f41834d7",
+      "name": "test_wobbler_schedules_hops_at_hop_intervals",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "5c30aa4e471b42cd421adfb2ea883cba",
+      "name": "test_no_matching_camera",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "38158c629ea2eb9fcd58d66ab03d93ef",
+      "name": "test_get_instrument_mode_parses_known_modes[trace-trace]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "66732077ec6201f9cddaec6921391892",
+      "name": "test_acquire_media_skip_when_not_released",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "649804f9324a2a0aa8dfe3e3844addee",
+      "name": "test_reachy_mini_lite_12_coeffs[0.0-0.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "e7389a373d4b9a40437898933c294e9b",
+      "name": "test_windows_device_count",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c1f66ea018288d4625c82dbdfccf8a4c",
+      "name": "test_rms_quiet_signal_is_negative",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "4be979180971ad9003a5cebe91741bce",
+      "name": "test_default_no_video_alias",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "bdee32afa6c93f83981205bbcd8295cf",
+      "name": "test_changed_beyond_tolerance_recomputes",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "994ae4deb545043eb2f8440fdd3e0ff6",
+      "name": "test_acquire_media_emits_lifecycle_events",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "ca9801b756175407d31d1f2543798973",
+      "name": "test_spam_during_lockout_does_not_extend",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "427edb4f334d8a2c9970a7ce949d70cd",
+      "name": "test_update_check_daemon_unreachable",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1e36c6ab9ed7cd1afe5af91a1aba7d08",
+      "name": "test_meta_shape_with_hardware_id",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "2b738772ac6e4f85971994ce55595bff",
+      "name": "test_update_info_non_dict_is_unknown_job",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "d7b439faa087b1bdc0bf7e869eb72f25",
+      "name": "test_app_manager",
+      "status": "passed",
+      "duration": 2017
+    },
+    {
+      "id": "ae7217e7dfb5a03fc694e828bd313698",
+      "name": "test_probe_exception_does_not_raise",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5fc4ac6947e7475e137bcbd5da724e4a",
+      "name": "test_goto_target_reshapes_flat_head_to_4x4",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "44d5fe611743b0c2904e01e5e0546de8",
+      "name": "test_reachy_mini_lite_12_coeffs[100.0-50.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "9d3aaa356a706bd5b3e090d31d94f243",
+      "name": "test_update_check_available",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "91937b15cd8c9478d3209179b90d6258",
+      "name": "test_handler_not_invoked_when_acquiring_from_free",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "6399bd61de27d87ae957684144c27f19",
+      "name": "test_rescan_failure_is_non_fatal",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "62979beb0ecefdf5725cec381ea5bc13",
+      "name": "test_get_instrument_mode_parses_known_modes[basic-basic]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "96fca819d4daa21e8f6e7f51a938c720",
+      "name": "test_remove_decrements",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "46f5c917c87cc6e777ff87b19efbdfb9",
+      "name": "test_watchdog_is_ignored_for_a_different_pid",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1ae0a0740f1cd5024e9d5783bf0ed375",
+      "name": "test_sway_silence_produces_near_zero",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "6c0c9411c5c7cfd01e3bff18e67d4c03",
+      "name": "test_arducam_5_coeffs[100.0-50.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5d542140b1cf93dd156133ec6d32dffd",
+      "name": "test_missing_sink_pad_logs_warning",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "4d91397175f2716cdc4319b43eeb2269",
+      "name": "test_notify_peer_session_failed_clears_session_bookkeeping",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "6fda755ce94ab9e1995cc070b2d5649f",
+      "name": "test_filter_alive_removes_unreachable",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "05d9e43f06f566024728376c4ce84e89",
+      "name": "test_meta_carries_transport_usb_when_set",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0834e8e120dae21ef274e3cff479359a",
+      "name": "test_notifier_sends_ready_status_and_watchdog",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "6cce066521d0d71735fe31ada25949d5",
+      "name": "test_enable_motors_writes_hardware_before_enable_torque",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "43c0260fcb3b9c8b5206024cf83e7ded",
+      "name": "test_mockup_daemon_start_writes_backend_ready_event",
+      "status": "passed",
+      "duration": 24
+    },
+    {
+      "id": "7e85b89a012f364a80b80717ff8b1cb8",
+      "name": "test_reachy_mini_lite_12_coeffs[640.0-360.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "597b18f221f1e8bcbe574c8b1dd03f5d",
+      "name": "test_local_acquire_evicts_remote_and_invokes_handler",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "043731ab62f7e130fb6420c5d00605cc",
+      "name": "test_read_float_env_negative_rejected",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "dd8f12ee2331f83305c34bd09c599554",
+      "name": "test_yaw_as_scalar_matches_slerp_without_back_crossing",
+      "status": "passed",
+      "duration": 25
+    },
+    {
+      "id": "c871c74c1131efb64c8ee1c43afefc99",
+      "name": "test_register_unregister_lifecycle",
+      "status": "passed",
+      "duration": 252
+    },
+    {
+      "id": "e57967ff4fe92b4eec5895f8c738550b",
+      "name": "test_enable_motors_pins_targets_to_present",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "a53c26ab517248081e777b0939f45a27",
+      "name": "test_wobbler_drops_past_deadlines",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "91bcbf2a6eafa9c9eb634649012df614",
+      "name": "test_wrong_password_fails_fast",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "ee7049e62f937e8ac3b244efe254b091",
+      "name": "test_install_watchdog_replaces_pre_existing_state_for_same_peer",
+      "status": "passed",
+      "duration": 4
+    },
+    {
+      "id": "2cd0f0cb91adc07306a29bd54886a967",
+      "name": "test_arducam_5_coeffs[960.0-540.0]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "aa29e3da0b016d975bec84a784a9ea71",
+      "name": "test_deadline_for_unknown_peer_is_no_op",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "621fbdfbbc9311edc12c314d622773fc",
+      "name": "test_meta_forwards_unknown_transport_value_verbatim",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "cc48822a069ae58743ae25bf5db884de",
+      "name": "test_loudness_monotonically_increasing",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "7ea1049f744ce45863da674707117e18",
+      "name": "test_analytical_kinematics_with_yaw",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "ef62412bd7e527f6266a3c6cd9be4e53",
+      "name": "test_pulseaudio_skips_monitor",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "85ed16470ce62172026736d36b02691c",
+      "name": "test_self_motion_cooldown_blocks_subsequent_wake_gesture",
+      "status": "passed",
+      "duration": 8818
+    },
+    {
+      "id": "66c59577b6da8454bca93979692278bd",
+      "name": "test_read_unknown_parameter_returns_404",
+      "status": "passed",
+      "duration": 88
+    },
+    {
+      "id": "d20ff60bcc98f5459fce126ef5fe3ffa",
+      "name": "test_windows_utf16_parsing",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "86cbd8cf3e310603cad7cf82c489ecf4",
+      "name": "test_wake_suppressed_when_autostart_service_active",
+      "status": "passed",
+      "duration": 7914
+    },
+    {
+      "id": "5385331086dc5426a365faa23eb93f60",
+      "name": "test_error_burst_log_levels",
+      "status": "passed",
+      "duration": 7321
+    },
+    {
+      "id": "2a23b831bfeb2ba604ab8767dbafe172",
+      "name": "test_generic_webcam_specs",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "403ed4da4ff4e29b1316117d6b34ebee",
+      "name": "test_zero_distortion_12_coeffs",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "bce134eac3f6b9d0d67987feb9d8b418",
+      "name": "test_initial_state",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "ae74bc7149a91496bc8f682e679376ec",
+      "name": "test_parse_daemon_startup_ignores_non_json_journal_lines",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "ab6c8a118606d6ab38d72ea66a6948b7",
+      "name": "test_missing_extension_is_rejected",
+      "status": "passed",
+      "duration": 5
+    },
+    {
+      "id": "a14d6c4f6b3bb5232c6d9fa37acf0da9",
+      "name": "test_enable_motors_clears_ik_required",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "bb4d4d972d73d135b2d72ed82d918ca7",
+      "name": "test_first_consumer_removes_probe",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "8147688e906de661d0400c099ba3eb1c",
+      "name": "test_connection_state_failed_triggers_pc_failed_notification",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "6a8db5b8b1b9c33dd01e67703f44f2b4",
+      "name": "test_sdk_warns_on_daemon_version_mismatch",
+      "status": "passed",
+      "duration": 2158
+    },
+    {
+      "id": "a40505cf4dcae12a0a2a89dccf162fdd",
+      "name": "test_control_hz_master_kill_forces_stock",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1377e7e381c381c7ca82247a88c7c2b3",
+      "name": "test_push_resets_after_large_gap",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "9d19daf499a3e2e759fcfb4a8eb5ca1b",
+      "name": "test_pulseaudio_device_count",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "071bde522087476b75525fddde86acf7",
+      "name": "test_meta_carries_robot_name",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "34c2f7cca4f61162c7d91d04813ee660",
+      "name": "test_update_start_400_maps_to_no_update",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "754e332a53d2dd39fa6ab969eda2c97d",
+      "name": "test_faulty_app",
+      "status": "passed",
+      "duration": 3504
+    },
+    {
+      "id": "76d56ddb9c4d150da63d2153a69d5a78",
+      "name": "test_deadline_fires_session_failed_when_stuck",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5d203e2e2e27cbdb6c6700655136a580",
+      "name": "test_pipewire_device_count",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "173ddcf0739f899520e8edd29645d82b",
+      "name": "test_wobbler_offsets_are_6_tuples",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "2eb3f3a70b3abdd2384b5fac231cf4f5",
+      "name": "test_mockup_backend_setup_writes_trace_span",
+      "status": "passed",
+      "duration": 4
+    },
+    {
+      "id": "e72d4b2bc3523875eb7823a98b26b67f",
+      "name": "test_custom_target_name",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "e0543bd7a736cd004a04cdfd6657122e",
+      "name": "test_wake_fires_when_both_gates_clean",
+      "status": "passed",
+      "duration": 7328
+    },
+    {
+      "id": "99bee8a263b28587a867bd460d64e653",
+      "name": "test_probe_removed_from_pad_dict",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "9ded666cf99fd477a862d36901820c8b",
+      "name": "test_install_sets_probe_id",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "5db488bd910652d0c47b8aa2c5a16bc6",
+      "name": "test_runs_rescan_when_disconnected",
+      "status": "passed",
+      "duration": 14
+    },
+    {
+      "id": "0eba74d127ae5a1be96f8284be927512",
+      "name": "test_get_instrument_mode_parses_known_modes[ TRACE -trace]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "295b280365716aa69cdee100bf7639cb",
+      "name": "test_negotiate_ignores_non_positive_recommended",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "413ba09102c2967611bfdd6a20750bd4",
+      "name": "test_acquire_media_writes_trace_spans",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "55d717fea393bcb1e24a3f50ce1d949b",
+      "name": "test_oversized_upload_is_rejected_by_middleware",
+      "status": "passed",
+      "duration": 17
+    },
+    {
+      "id": "15c455a48211f43d025de154433de983",
+      "name": "test_zero_distortion[100.0-50.0]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "77ce297b2bdde9d7365bbc485e18a7a6",
+      "name": "test_remove_is_noop_when_not_installed",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "7344800dfcad17edfc69a6c2b67ab24e",
+      "name": "test_run_loop_backs_off_when_connect_returns_in_error_state",
+      "status": "passed",
+      "duration": 157
+    },
+    {
+      "id": "615d6f8caa5e75ca640339548920d9d2",
+      "name": "test_deprecated_backend_resolves_with_warning[MediaBackend.GSTREAMER_NO_VIDEO-MediaBackend.LOCAL]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "eb96eed69ff40e4b1362b1a7fc5aecb5",
+      "name": "test_negotiate_clamps_above_ceiling",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "06d8c80a29a4407cca60643133595ec1",
+      "name": "test_second_consumer_does_not_reinstall_probe",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "a5d9c7c7149ab9c81d6d72f79f83b3cf",
+      "name": "test_media_construct_writes_trace_span_and_camera_specs",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "6a2f6c0b2c4a446a716dde055b4803a1",
+      "name": "test_enable_motors_skips_position_writes_in_torque_control_mode",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "b54b6b8252834dc869509a25c86ca110",
+      "name": "test_release_media_skip_when_already_released",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "ce633c505ac3cc7982bc0daecbd38bc2",
+      "name": "test_default_timing_scales_for_large_distance",
+      "status": "passed",
+      "duration": 203
+    },
+    {
+      "id": "064e54d1706e3a726cbfa9c172413e66",
+      "name": "test_parse_daemon_startup_cli_reads_stdin",
+      "status": "passed",
+      "duration": 40
+    },
+    {
+      "id": "9806b3f5d65a631cb738d55fbdd19843",
+      "name": "test_wobbler_reset_zeros_offsets",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "2a216ecd1b6c7dd59d36e930ef3c3375",
+      "name": "test_configure_daemon_logging_off_raises_level_to_warning",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "89a2a9ecd79d97a6882ebddef0830a8c",
+      "name": "test_load_kinematics",
+      "status": "passed",
+      "duration": 24
+    },
+    {
+      "id": "9bd7f0c091ce1589a15d451c5fad9a15",
+      "name": "test_negotiate_ignores_non_numeric_lease",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "4f0c9c0cc330af0ad78b53f5345b2f70",
+      "name": "test_get_instrument_mode_falls_back_to_basic",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "7dcb8a570dee2116123179f709bb2b31",
+      "name": "test_notifier_is_disabled_without_notify_socket",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "20fb2a0b1d99f04e20d9beeabdd04cba",
+      "name": "test_control_hz_honors_valid_override",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "aebf873f28cbf17174d3f03fd55f43d9",
+      "name": "test_missing_prior_pose_recomputes",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "bd190477b197d06e325b48c499d451b7",
+      "name": "test_zero_distortion[1200.0-700.0]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "47141b6d4913f63c91ef72aca4ff71a3",
+      "name": "test_pipewire_source",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "84517290745ebbff7acbd02b462fe172",
+      "name": "test_fk_skip_inactive_by_default",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "65884e2ae4d8f6776a8efa8236341551",
+      "name": "test_sway_short_input_no_output",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "368203ef7d247f14d93a17f2562b7f89",
+      "name": "test_js_command_fields_match_protocol",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "0a36508e1f070f400959004490c83588",
+      "name": "test_multi_robot_isolation",
+      "status": "skipped",
+      "duration": 0
+    },
+    {
+      "id": "a6170a3aa4bcf5084442135c1e1bdb97",
+      "name": "test_deadline_no_op_after_failure_already_notified",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "1c8adaa3ed6fa8ad22aa0ca12c5b938a",
+      "name": "test_windows_sink",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "3a266eea198c5ea3c25ec4cbb0ec701b",
+      "name": "test_clearing_handler_disables_eviction_callback",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "f56c91c519624c0a97ae76621862c3a1",
+      "name": "test_pulseaudio_source",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "8789b4ad93de3b8675d72089d84c5438",
+      "name": "test_update_info_small_payload_preserves_last",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "3bf2db0394417e64f35b334500925caa",
+      "name": "test_goto_target_passes_none_when_head_omitted",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5bc9cdbe59258de816bddad27e6e73aa",
+      "name": "test_peer_state_default_is_all_new",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "b8e49384f0bcc413a1d4070960d9d6b6",
+      "name": "test_reachy_mini_lite_12_coeffs[1919.0-1079.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "eeaebc0231d86525851b762b5e99b0a7",
+      "name": "test_linux_pulseaudio_reachy_camera",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "80e0a0763ae53cdc885ada0f9c1f227a",
+      "name": "test_add_twice_increments_to_two",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "86250304dbb8fcbe6ef809b202cefbdb",
+      "name": "test_read_reachy_mini_install_info_from_site_packages_git",
+      "status": "passed",
+      "duration": 4
+    },
+    {
+      "id": "be987452967b0d71ca91bb6e312c3ee0",
+      "name": "test_12_coeff_differs_from_pinhole",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "80a4f31f796235021c27c6078399ed56",
+      "name": "test_meta_carries_transport_wifi_by_default",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "03d92e6e562afe4fb880b7e64a8d6658",
+      "name": "test_release_local_is_no_op_when_remote_held",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "2c55adb83e38d422303e4fd0d805ec4f",
+      "name": "test_full_cycle_add_add_remove_remove",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "115678ca5e8d3fa09d687604165c041e",
+      "name": "test_sway_custom_sample_rate",
+      "status": "passed",
+      "duration": 7
+    },
+    {
+      "id": "b460ba6d6b445a18dda2c7dca59486ba",
+      "name": "test_deprecated_backend_resolves_with_warning[MediaBackend.SOUNDDEVICE_NO_VIDEO-MediaBackend.LOCAL]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "93d164aceb85c081b7810e03766879c5",
+      "name": "test_stop_fails_remaining_stages_still_run",
+      "status": "passed",
+      "duration": 5
+    },
+    {
+      "id": "ea7c1cddbcfdd09891b23ca77148b412",
+      "name": "test_update_info_404_is_unknown_job",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "e8d7c3eecf2b33f3d10d9956fb9e58b1",
+      "name": "test_current_backends_no_warning[MediaBackend.NO_MEDIA]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "67fc4f9630f4b81eb224deeaf53b4f1e",
+      "name": "test_arducam_5_coeffs[0.0-0.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "fd3593daa41c3417749e61add2917ae0",
+      "name": "test_clamp_floors_below_min",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c0d0696d01f9db9fc04db150df53a3fc",
+      "name": "test_push_without_appsrc_returns_none",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "9d07e6e4a333508b3993e606e866fa5a",
+      "name": "test_discovered_robot_defaults",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0fd14835ab343c98a3e016e87e00edc2",
+      "name": "test_self_motion_cooldown_expires",
+      "status": "passed",
+      "duration": 10219
+    },
+    {
+      "id": "6699842cd2c67ccb35cd4cc7c347d5f9",
+      "name": "test_zero_distortion[640.0-360.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "49f14ee28919632f2e490d1802e663f8",
+      "name": "test_wobbler_stop_zeros_offsets",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "eaef9147019eac03d201468e2576dc4d",
+      "name": "test_imx708_rpi_camera",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "6a444dd18e3e274c1b845e0254bae75b",
+      "name": "test_update_start_missing_job_id",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "16d5cbf3abacd0c2e616fa7897c951b6",
+      "name": "test_release_media_emits_lifecycle_events",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "37d78c3cd32990af12dfef6ae229523e",
+      "name": "test_identity_camera_center",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "94834fa088c07a23577834e4dcc697ec",
+      "name": "test_audio_only_inits_audio_not_camera",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "d220316b6c6c0620431b9d9ca9153e50",
+      "name": "test_remote_acquire_from_free",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c054c8987d2b8f1f7f8b936f7ebc0915",
+      "name": "test_negotiate_falls_back_to_lease_over_three",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "53d1a69d0dc9f5265b372c1ec501c026",
+      "name": "test_double_local_acquire_raises",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "a6257ae4808c21d3c1cc9d2712b91474",
+      "name": "test_pipewire_sink",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "a532e5d97999a045bc4e9265ec8c59c3",
+      "name": "test_lifespan_force_safe_shutdown_overrides_flag",
+      "status": "passed",
+      "duration": 2164
+    },
+    {
+      "id": "8884c99beea3c37192302db1580a34d2",
+      "name": "test_loudness_below_low_threshold_is_zero",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "a6fdd0f3dcd8c858d651c5ed66237721",
+      "name": "test_unchanged_within_tolerance_skips",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c0c0adcd04f61e853c00d2a12368cf7e",
+      "name": "test_push_first_buffer_anchors_to_running_time",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5bfaac67611b3c0be9a838fc586dd60a",
+      "name": "test_dotdot_filename_is_rejected",
+      "status": "passed",
+      "duration": 5
+    },
+    {
+      "id": "a4e85f6c0ec6e03b62296d75c1c4fa2b",
+      "name": "test_check_and_fix_restore_venv_repairs_editable",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "d3e8c4d6d31c26740d41e0722ce8e7e5",
+      "name": "test_get_instrument_mode_parses_known_modes[off-off]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "04146af83cf6e8997207d12cfcc64bfc",
+      "name": "test_yaw_as_scalar_routes_through_front_not_back",
+      "status": "passed",
+      "duration": 47
+    },
+    {
+      "id": "27ac12f224623579007d7ba3203600d8",
+      "name": "test_teardown_watchdog_is_idempotent",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "0755d34fbe0f711b180596ce4d9441f0",
+      "name": "test_meta_includes_hardware_id_when_available",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1d0680639b2e9512ac1ccfe0b45b9992",
+      "name": "test_parse_daemon_startup_summarizes_latest_window",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "19d0bc5055f4a5b0b4248c4d8300aa46",
+      "name": "test_read_float_env_accepts_zero",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "28392c11e80d4ef975ac9612c5bb3a87",
+      "name": "test_sets_up_hotspot_when_still_disconnected_after_rescan",
+      "status": "passed",
+      "duration": 14
+    },
+    {
+      "id": "d9426b3fe54f3e0a89a523138fdf48bb",
+      "name": "test_windows_source",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1249809811f33ad7e60ad3b078d521fb",
+      "name": "test_negotiate_ignores_non_positive_lease",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "01baf0615500a09b0e8e0a3972c3e990",
+      "name": "test_process_command_motor_mode_writes_event",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "97321b7347eaf906a2c55cf55662ad8c",
+      "name": "test_pipewire_has_reachy_camera",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "56701f66577f21e87ce0a958f7fb58cb",
+      "name": "test_remove_clears_probe_id",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "389dfdc047cbf0b225bda7a55fb5a2bc",
+      "name": "test_reachy_mini_lite_12_coeffs[1200.0-700.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "9078f6d875e5fdcbac5872f48ab9d15d",
+      "name": "test_cors_origin_regex",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "b7b8935276359731d47352243b3a7da9",
+      "name": "test_last_consumer_removed_reinstalls_probe",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "024c7bbfe41cc9813de493c850f8947d",
+      "name": "test_connection_state_connecting_does_not_notify",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "9b1b4779457e148a5b0929d4aed1ae19",
+      "name": "test_meta_used_by_producer_status_payload",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "92cea7085ce1e28b2f98524b8fe3a832",
+      "name": "test_daemon_early_stop",
+      "status": "passed",
+      "duration": 2315
+    },
+    {
+      "id": "84cd73f44fde9db617c8b7d0edfdb149",
+      "name": "test_meta_omits_hardware_id_when_absent",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "23f37031127d992f2f22eb67006f14a3",
+      "name": "test_linux_pipewire_priority_reachy_over_arducam",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "ff210860e3b1d7ee7930519a5099a91e",
+      "name": "test_windows_reachy_camera",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "c7161aae672c4467709a6044cfc5d95a",
+      "name": "test_initial_count_is_zero",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "685a7ea10d6d892ed0b4012786386b51",
+      "name": "test_negotiate_clamps_lease_derived_value",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "24c218f1c0bcc84bbaa5b6fb6d718f96",
+      "name": "test_sway_reset_clears_state",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "965bd102b2e1a7defda9dcc4d4fbd4a3",
+      "name": "test_windows_skips_loopback_source_uppercase_bool",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c64d972280aaf4a3fed5b17ce0618ea1",
+      "name": "test_self_motion_cooldown_blocks_subsequent_sleep_gesture",
+      "status": "passed",
+      "duration": 8833
+    },
+    {
+      "id": "033a74764a88f2dc42c651a0a2a2f50f",
+      "name": "test_wobbler_schedules_offsets_for_a_tone",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "000db99030c43d24c5aab8aa15a0217c",
+      "name": "test_configure_audio_skips_aec_for_named_card",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "4ddec48961e1ceefc94afd52263c5ab3",
+      "name": "test_parser_preserves_index_order",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "36085e83879c18ba5c2ec12636929db0",
+      "name": "test_no_probe_when_pad_is_none",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "869f93e17fa61f54d126046e0df748b0",
+      "name": "test_parser_extracts_properties",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0d8e3f1b4c7e511e18a8d7beed85f364",
+      "name": "test_returns_404_when_media_server_is_none",
+      "status": "passed",
+      "duration": 18
+    },
+    {
+      "id": "af0ce5def17b54412aa47b5c4ad3c800",
+      "name": "test_no_token_in_urls[ts/lib/reachy-mini.ts]",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "2f8ef04e13112535f85251213e176e07",
+      "name": "test_notify_peer_session_failed_sends_endsession_to_central",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "3a77901a7c44717c04b070686541363e",
+      "name": "test_macos_sink",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "60fc30658f347fe528774927bd72f343",
+      "name": "test_identity_camera_offset",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "490c8be0f1ac6d0ff86341314a14fc81",
+      "name": "test_find_robots_returns_collected",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "ce7b9114ac5a30cc0a7d98b349a0c2f8",
+      "name": "test_add_increments_to_one",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "e35186d95d6cad8b50275ce8e27edde3",
+      "name": "test_push_continues_without_gap",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "bcc173eb8518dfc31e4f81ee4b5f4aae",
+      "name": "test_loudness_above_high_threshold_clamped",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "e049994a44aa3e5c77df5c5ea00664e6",
+      "name": "test_deprecated_backend_resolves_with_warning[MediaBackend.SOUNDDEVICE_OPENCV-MediaBackend.LOCAL]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "dbf8d0beaf7621ed7e7a35a483e47852",
+      "name": "test_clamp_passes_through_in_range_value",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "5794354712205e0bca33f6e3962ef7b0",
+      "name": "test_control_hz_defaults_to_stock_when_unset",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "0f233259680d13e143d5cebcb2ab1458",
+      "name": "test_no_underflow_on_spurious_remove",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "2f880699c1eaefe46b4a2a1b62ebf766",
+      "name": "test_deprecated_backend_resolves_with_warning[MediaBackend.GSTREAMER-MediaBackend.LOCAL]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "4aa445caa4cb925c8ee145d05f9cfeb7",
+      "name": "test_mujoco_specs",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "020b17ee6efb72ce7647e05fe5be2444",
+      "name": "test_no_token_in_urls[ts/lib/url-helpers.ts]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0853276cf325fb24b48ae90d23a6587c",
+      "name": "test_find_no_args_tries_pollen_ids_first",
+      "status": "passed",
+      "duration": 5
+    },
+    {
+      "id": "2bba8bc8143447abe07026d9cd3751ee",
+      "name": "test_trace_mode_writes_timing_event",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "86cd071f64ed2c4acf25ed0a40a350b6",
+      "name": "test_deadline_skips_when_connection_is_healthy",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "70fc620470c0a3c26bc33b515792f53e",
+      "name": "test_unregister_is_noop_when_not_registered",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "216d305a8ff9f88d6f957908d0c74fc8",
+      "name": "test_success_resets_throttle",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1af6a73dc9a67dbd9ed5339a5d891b47",
+      "name": "test_log_event_writes_basic_structured_event",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "3a7dce6cdb8d0f836b2e3cc09884f66e",
+      "name": "test_find_no_args_returns_none_when_no_device_present",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "420c62b1b538f0113b86bb729614f353",
+      "name": "test_peer_state_asdict_round_trip",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "eda04c044f0e930dab678232eb54e4f3",
+      "name": "test_release_remote_is_idempotent_when_free",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "2a709dad7ecb6e50a70cb34fdb267023",
+      "name": "test_remote_acquire_refused_while_local_held",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "7f34ea638269d71f8b4d14d592403f16",
+      "name": "test_pipewire_has_reachy_audio_source",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "2c0a39bce988a33606258692776f940d",
+      "name": "test_gst_init_does_not_crash_host_python",
+      "status": "passed",
+      "duration": 64
+    },
+    {
+      "id": "4018ec943bec9d9ece0de729b371ec17",
+      "name": "test_transient_exhausted_reraises",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "00a9a9eb81486761926063d898f25ba3",
+      "name": "test_release_local_tolerates_holder_mismatch",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "d356da496590c9a3f6f925a863f3c16d",
+      "name": "test_update_check_busy_maps_to_in_progress",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "640ea272b80a4ff72358596a8874309f",
+      "name": "test_5_coeff_differs_from_pinhole",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "731acc9d9fee47e2a9cab0f410e2741c",
+      "name": "test_disconnect_preserves_throttle",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "b1fda72d7723f2f77a6f19c66783c045",
+      "name": "test_robot_collector_add_service",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "2a83a1de0f390a2e7ba82c3fb61bc5fa",
+      "name": "test_aec_rate_is_a_supported_webrtc_rate",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "18d3e02530c69fff0bc922acd0b34597",
+      "name": "test_starts_free",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0e4d3af3ae91e1457b61c7d69d6714c4",
+      "name": "test_reason_constants_are_distinct_strings",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "1a33d49d8ae3611f3653c495e25eec0c",
+      "name": "test_negotiate_falls_back_to_default_when_no_negotiation",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "f4ccd75c54e737586087d8e37aa585b2",
+      "name": "test_returns_200_with_null_age_when_no_frames",
+      "status": "passed",
+      "duration": 18
+    },
+    {
+      "id": "6d1e66db1d591103ffb5db98cef08766",
+      "name": "test_ice_negotiation_deadline_is_reasonable",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "6c3fdb01ef87ad0c07ae80fcbc22032a",
+      "name": "test_local_release_returns_to_free",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "6fdff94c99019a57cc270494faa7c776",
+      "name": "test_center_pixel_unaffected",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "c608805dd064f57c231ec520b48845fc",
+      "name": "test_no_token_in_urls[ts/lib/upload-helpers.ts]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "4dd0471a62e2ace107864f84ffadc1ea",
+      "name": "test_default_alias",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "6b001f234f726dbe28261fafaedd8738",
+      "name": "test_non_audio_content_with_audio_extension_is_rejected",
+      "status": "passed",
+      "duration": 9
+    },
+    {
+      "id": "cea8cc3c9a19e7792bb2029db0039440",
+      "name": "test_default_timing_uses_floor_when_distance_small",
+      "status": "passed",
+      "duration": 302
+    },
+    {
+      "id": "ca4bb28e98d95df8a0d1e47efedc8cd0",
+      "name": "test_control_hz_invalid_falls_back_to_stock",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "a4360a26c02da78e99e4e49a80165284",
+      "name": "test_meta_shape_without_hardware_id",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "66c0f70068d02d3074a806478984e6d2",
+      "name": "test_service_type_constant",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0bc4eb1fd496801de6d981e7893dadd1",
+      "name": "test_correct_pin_rejected_during_lockout",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "c199364326c89940292ea375c0d2de78",
+      "name": "test_wobbler_start_is_idempotent",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1f37e040cdf498cf4946c7cdf191ad95",
+      "name": "test_master_kill_overrides_opt_in",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "ee99d0bbbf425cd407444c084e30cfd7",
+      "name": "test_lifespan_respects_goto_sleep_on_stop_flag",
+      "status": "passed",
+      "duration": 2159
+    },
+    {
+      "id": "75c8722c5e9ec21d7540ba8b73bbf2b4",
+      "name": "test_arducam_only",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "59b197a87ae96f6b113594656e3827d5",
+      "name": "test_spurious_remove_at_zero_does_not_block_twice",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "15630afea9838aa23af3569f8c3ccb43",
+      "name": "test_zero_distortion[960.0-540.0]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "a20e7918228565789e4e6cbacd096c8e",
+      "name": "test_find_robots_returns_empty",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5df2598146173365d2cab413dd2cfe7a",
+      "name": "test_remote_release_returns_to_free",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "70741ceb523962e5016797018ae1fcd3",
+      "name": "test_windows_skips_loopback_source",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1158582d024925f8476ca4d313ea7fc3",
+      "name": "test_valid_wav_is_stored",
+      "status": "passed",
+      "duration": 18
+    },
+    {
+      "id": "cdc9abf95bc534dd10c477ae7e3885b3",
+      "name": "test_update_start_returns_job_id",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "a3d7729fba4dce0244e7dbdb37db0bd0",
+      "name": "test_app",
+      "status": "passed",
+      "duration": 2609
+    },
+    {
+      "id": "7d0419fbac2bb765f15995f89d2a648e",
+      "name": "test_to_plain_json_normalizes_hf_objects",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c7af474993b2e6b9788a91f9987c38f9",
+      "name": "test_current_backends_no_warning[MediaBackend.AUDIO_ONLY]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "49a59155b862799cc79f280d7a9b8239",
+      "name": "test_goto_target_via_webrtc_json_message",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "806ba9a774b849f99da59804910dd465",
+      "name": "test_configure_audio_enables_aec_on_autoaudiosrc",
+      "status": "skipped",
+      "duration": 0
+    },
+    {
+      "id": "620b4ae0f24876caf347c29fd5e5759f",
+      "name": "test_legacy_env_restores_pre_fix_timing",
+      "status": "passed",
+      "duration": 202
+    },
+    {
+      "id": "895559aa546893f103efe21e00ff3e63",
+      "name": "test_arducam_5_coeffs[1919.0-1079.0]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "bec75e6afaf1b41516e1dcff0ee207ad",
+      "name": "test_wobbler_stop_cancels_pending",
+      "status": "passed",
+      "duration": 3
+    },
+    {
+      "id": "7fdd782029ec9c0c2ca2ea88d83b3408",
+      "name": "test_placo_load_urdf",
+      "status": "passed",
+      "duration": 11
+    },
+    {
+      "id": "1e903e946c550d97df88092e415ef6b7",
+      "name": "test_public_notify_schedules_work_on_relay_loop",
+      "status": "passed",
+      "duration": 21
+    },
+    {
+      "id": "da46343f959504c62c7e5085ad2a153e",
+      "name": "test_lockout_expires",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "8d7ba8b767d3ff54b86a48eee0590241",
+      "name": "test_invalid_env_values_fall_back_to_defaults",
+      "status": "passed",
+      "duration": 204
+    },
+    {
+      "id": "32438ed71540b309c511749b50a013cb",
+      "name": "test_registered_txt_records_carry_metadata_keys[lite]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "9dc573da3790042cb75a0e65d6ff0c7b",
+      "name": "test_control_hz_clamps_out_of_range",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "758557caa8d6da601daf86e7e707fec9",
+      "name": "test_configure_daemon_logging_writes_jsonl",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "a7db72f75e07bb9030b4b3261d115086",
+      "name": "test_placo_fk_solver",
+      "status": "passed",
+      "duration": 12
+    },
+    {
+      "id": "035184960c46f52b1ffb2d1f8c5aa7a8",
+      "name": "test_public_notify_no_op_without_running_loop",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "31cc924e79b077e832400baa515ec4e2",
+      "name": "test_daemon_multiple_start_stop",
+      "status": "passed",
+      "duration": 4272
+    },
+    {
+      "id": "bc7cfa0cce6aa121d99d47c39c9b929d",
+      "name": "test_read_float_env_empty_string_uses_default",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "50627e7a7eb1faa90f9797c0db4ff6c4",
+      "name": "test_connection_state_failed_only_fires_once",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "c68c904a9a6fe03a6aaa677895e3be65",
+      "name": "test_webrtcdsp_fails_to_start_without_a_probe",
+      "status": "skipped",
+      "duration": 0
+    },
+    {
+      "id": "30774783ce17c551ae1cc6679f080251",
+      "name": "test_teardown_watchdog_drops_state_and_cancels_timer",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "6d406bdd30c9fb6bba660f81bbacef89",
+      "name": "test_clamp_ceilings_above_max",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "ed7ae273d6381be30b03a107b94d31cb",
+      "name": "test_yaw_as_scalar_endpoints_exact",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "e442bf5dd77e990e3e9415b55dc4a08d",
+      "name": "test_skips_rescan_when_wlan_active",
+      "status": "passed",
+      "duration": 14
+    },
+    {
+      "id": "dea716c87f024c81f173376e06875775",
+      "name": "test_rms_full_scale_sine_near_zero",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "97c1e01e0b78788d66fa5373a9cd19e2",
+      "name": "test_pulseaudio_has_monitor_device",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "3f193a0c29786241a2520e2ede5219d4",
+      "name": "test_middle_consumer_remove_does_not_reinstall_probe",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "f4f8e1068dfcc6b48cd093e481e3e2c6",
+      "name": "test_get_respeaker_card_number",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "7d3e1636d6ef11b6e9d092b108b5b9da",
+      "name": "test_sway_empty_input",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "06f9cc99b8912e46c050ea04eea0b6ff",
+      "name": "test_dispatch_swallows_handler_exceptions",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "b3c5e3d5a8aa30c2907c86679ff1f85c",
+      "name": "test_reachy_mini_lite_12_coeffs[960.0-540.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "fa73728eeaa7e813045673d563df9afb",
+      "name": "test_returns_200_with_expected_shape",
+      "status": "passed",
+      "duration": 21
+    }
+  ],
+  "flakyTests": [],
+  "retryTests": [],
+  "checks": [],
+  "name": "Reachy Mini Tests",
+  "duration": 101640,
+  "createdAt": 1782945292060,
+  "plugin": "Awesome",
+  "meta": {
+    "reportId": "786c28e6-17d7-42a9-a8ec-ceda921eb34c",
+    "singleFile": false,
+    "withTestResultsLinks": true
+  },
+  "pluginId": "awesome",
+  "pullRequestHref": "",
+  "jobHref": "https://github.com/TheKentuckian/reachy_mini/actions/runs/28552103779",
+  "href": "awesome/",
+  "coverage": 34
+}

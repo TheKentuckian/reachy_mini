@@ -1,0 +1,1 @@
+INFO     reachy_mini.media.media_manager:media_manager.py:177 Using AUDIO_ONLY backend (GStreamer audio; camera skipped).

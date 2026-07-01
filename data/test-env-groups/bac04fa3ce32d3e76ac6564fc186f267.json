@@ -1,0 +1,1 @@
+{"id":"bac04fa3ce32d3e76ac6564fc186f267","fullName":"tests.unit_tests.test_wifi_config.TestEnsureWifiOnStartup#test_skips_rescan_when_hotspot_active","name":"test_skips_rescan_when_hotspot_active","status":"passed","testResultsByEnv":{"default":"48cc8b30a77bd5469dadc3a73e605e90"}}

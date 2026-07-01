@@ -1,0 +1,1 @@
+{"id":"cdd3e54f3ee7af875782aa2886945b92","fullName":"tests.unit_tests.test_antenna_sleep_monitor#test_self_motion_cooldown_blocks_subsequent_wake_gesture","name":"test_self_motion_cooldown_blocks_subsequent_wake_gesture","status":"passed","testResultsByEnv":{"default":"85ed16470ce62172026736d36b02691c"}}

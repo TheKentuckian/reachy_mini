@@ -1,0 +1,1 @@
+{"id":"ae2cb6e009f25de0f010a388d332754f","fullName":"tests.unit_tests.test_wifi_config.TestEnsureWifiOnStartup#test_sets_up_hotspot_when_still_disconnected_after_rescan","name":"test_sets_up_hotspot_when_still_disconnected_after_rescan","status":"passed","testResultsByEnv":{"default":"28392c11e80d4ef975ac9612c5bb3a87"}}

@@ -1,0 +1,1 @@
+INFO     reachy_mini.media.media_manager:media_manager.py:168 Using LOCAL backend (GStreamer IPC camera + GStreamer audio).

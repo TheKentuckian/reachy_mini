@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:138 Invalid REACHY_WAKE_UP_DURATION_SCALE='-0.5' (must be >= 0.0), falling back to 1.5

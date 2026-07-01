@@ -1,0 +1,1 @@
+WARNING  test_ipc_stats:media_server.py:1357 IPC sink has no 'sink' pad; frame counter probe not installed.

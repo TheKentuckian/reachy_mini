@@ -1,0 +1,1 @@
+{"id":"1fb8bee9a7ccb61c63581d4ce61ba2e6","fullName":"tests.unit_tests.test_wifi_config.TestEnsureWifiOnStartup#test_runs_rescan_when_disconnected","name":"test_runs_rescan_when_disconnected","status":"passed","testResultsByEnv":{"default":"5db488bd910652d0c47b8aa2c5a16bc6"}}

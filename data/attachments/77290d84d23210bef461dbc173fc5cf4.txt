@@ -1,0 +1,8 @@
+{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"instrumentation.configured","message":"Daemon instrumentation configured","attrs":{"mode":"basic","log_level":"INFO","log_file":"/tmp/pytest-of-runner/pytest-0/test_release_media_emits_lifec0/daemon.jsonl"}}
+{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Daemon version: 1.8.4","message":"Daemon version: 1.8.4","attrs":{}}
+{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Media disabled (--no-media). No camera, audio, or media server.","message":"Media disabled (--no-media). No camera, audio, or media server.","attrs":{}}
+{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Releasing media hardware for direct access...","message":"Releasing media hardware for direct access...","attrs":{}}
+{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.media.release.start","message":"daemon.media.release.start","attrs":{}}
+{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Central signaling relay stopped","message":"Central signaling relay stopped","attrs":{}}
+{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Media hardware released.","message":"Media hardware released.","attrs":{}}
+{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.media.release.complete","message":"daemon.media.release.complete","attrs":{"media_released":true}}
