@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 def _is_loopback_host(host: str) -> bool:
-    """True if *host* refers to the local machine (loopback).
+    """Return True if *host* refers to the local machine (loopback).
 
     The SDK<->daemon ``/ws/sdk`` channel carries a high-frequency command +
     state stream. Over loopback (the on-robot app<->daemon case) permessage-
