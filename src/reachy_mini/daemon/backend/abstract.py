@@ -1210,7 +1210,10 @@ class Backend:
     INIT_ANTENNAS_JOINT_POSITIONS = np.array(
         (-0.1745, 0.1745)
     )  # ~10° offset to reduce shaking at vertical
-    SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-3.05, 3.05))
+    # Fork (#62): +-2.6 rad, not +-3.05. The stock value sits past the antenna
+    # mechanical stop, so parking there trips the servo overload protection.
+    # Must match reachy_mini.SLEEP_ANTENNAS_JOINT_POSITIONS (the SDK-side copy).
+    SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-2.6, 2.6))
     SLEEP_HEAD_POSE = np.array(
         [
             [0.911, 0.004, 0.413, -0.021],
