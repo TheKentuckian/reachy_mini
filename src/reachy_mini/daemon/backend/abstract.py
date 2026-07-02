@@ -120,7 +120,6 @@ from reachy_mini.vision.look_at import (
     look_at_image_pose,
 )
 
-
 # Conversion factor used when scaling the "magic distance" returned by
 # distance_between_poses() into a wake-up animation duration. Each unit of
 # magic distance corresponds to ~20 ms of motion.
