@@ -58,7 +58,14 @@ SLEEP_HEAD_JOINT_POSITIONS = [
 
 
 INIT_ANTENNAS_JOINT_POSITIONS = [-0.1745, 0.1745]  # ~10° offset to reduce shaking at vertical
-SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
+# ~±149° folded-down "asleep" pose. The previous ±3.05 rad (~±175°) was ~0.05 rad
+# past the servos' reachable travel: the antennas stalled against the mechanical
+# stop and, because the sleep-park holds indefinitely, the Feetech servos tripped
+# into a persistent Overload Error (torque disabled → antennas stuck folded until a
+# daemon restart rebooted the motors). Empirically the antennas track commands
+# cleanly to ±3.0 rad and hold ±2.6 rad for 12s+ with zero overload, so ±2.6
+# keeps the drooped "asleep" look with comfortable margin from the stall point.
+SLEEP_ANTENNAS_JOINT_POSITIONS = [-2.6, 2.6]
 SLEEP_HEAD_POSE = np.array(
     [
         [0.911, 0.004, 0.413, -0.021],
