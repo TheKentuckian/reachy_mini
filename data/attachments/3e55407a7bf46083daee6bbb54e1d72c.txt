@@ -1,0 +1,4 @@
+{"ts":"2026-07-02T10:24:54+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"instrumentation.configured","message":"Daemon instrumentation configured","attrs":{"mode":"basic","log_level":"INFO","log_file":"/tmp/pytest-of-runner/pytest-0/test_release_media_skip_when_n0/daemon.jsonl"}}
+{"ts":"2026-07-02T10:24:54+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Daemon version: 1.8.4","message":"Daemon version: 1.8.4","attrs":{}}
+{"ts":"2026-07-02T10:24:54+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Media disabled (--no-media). No camera, audio, or media server.","message":"Media disabled (--no-media). No camera, audio, or media server.","attrs":{}}
+{"ts":"2026-07-02T10:24:54+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.media.release.skip","message":"daemon.media.release.skip","attrs":{"already_released":false,"no_server":true}}

@@ -1,4 +1,0 @@
-{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"instrumentation.configured","message":"Daemon instrumentation configured","attrs":{"mode":"trace","log_level":"INFO","log_file":"/tmp/pytest-of-runner/pytest-0/test_media_construct_writes_tr0/daemon.jsonl"}}
-{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Daemon version: 1.8.4","message":"Daemon version: 1.8.4","attrs":{}}
-{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"span.end","message":"daemon.media.construct","attrs":{"name":"daemon.media.construct","duration_ms":0.006,"outcome":"ok"}}
-{"ts":"2026-07-01T22:34:43+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.media.camera_specs","message":"daemon.media.camera_specs","attrs":{"camera_specs_name":"fake-camera"}}
