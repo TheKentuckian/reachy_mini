@@ -1,1 +1,1 @@
-{"id":"bac04fa3ce32d3e76ac6564fc186f267","fullName":"tests.unit_tests.test_wifi_config.TestEnsureWifiOnStartup#test_skips_rescan_when_hotspot_active","name":"test_skips_rescan_when_hotspot_active","status":"passed","testResultsByEnv":{"default":"238d786be7861f5789fa1fe00bec24e3"}}
+{"id":"bac04fa3ce32d3e76ac6564fc186f267","fullName":"tests.unit_tests.test_wifi_config.TestEnsureWifiOnStartup#test_skips_rescan_when_hotspot_active","name":"test_skips_rescan_when_hotspot_active","status":"passed","testResultsByEnv":{"default":"37ba95a53f23b92b095615a25e908469"}}

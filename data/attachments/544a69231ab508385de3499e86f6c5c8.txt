@@ -1,0 +1,2 @@
+{"ts":"2026-07-02T19:51:52+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"instrumentation.configured","message":"Daemon instrumentation configured","attrs":{"mode":"basic","log_level":"INFO","log_file":"/tmp/pytest-of-runner/pytest-0/test_log_event_writes_basic_st0/daemon.jsonl"}}
+{"ts":"2026-07-02T19:51:52+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.test.event","message":"daemon.test.event","attrs":{"phase":"unit-test"}}
