@@ -368,6 +368,11 @@ class RobotBackend(Backend):
 
         self.c.enable_torque()
         self._torque_enabled = True
+        # The direct position writes above bypass the redundant-write cache; a
+        # target equal to the last pre-disable send must still be written on the
+        # next tick (the servo was re-pinned to *present* pose, not the target).
+        self._last_sent_head_positions = None
+        self._last_sent_antenna_positions = None
 
     def disable_motors(self) -> None:
         """Disable the motors by turning the torque off."""
@@ -430,6 +435,10 @@ class RobotBackend(Backend):
             self.c.enable_stewart_platform(True)
 
         self._current_head_operation_mode = mode
+        # Mode switches write present positions directly (above), bypassing the
+        # redundant-write cache — invalidate it so the next tick's target is
+        # always re-sent even if numerically equal to the last cached send.
+        self._last_sent_head_positions = None
 
     def set_antennas_operation_mode(self, mode: int) -> None:
         """Change the operation mode of the antennas motors.
@@ -470,6 +479,9 @@ class RobotBackend(Backend):
                 self.c.enable_antennas(False)
 
             self._current_antennas_operation_mode = mode
+            # Same cache invalidation as set_head_operation_mode: the direct
+            # write above bypasses the redundant-write cache.
+            self._last_sent_antenna_positions = None
 
     def _read_motor_state(self) -> Any:
         """Read the latest motor state, instrumenting comms errors (issue #31).
