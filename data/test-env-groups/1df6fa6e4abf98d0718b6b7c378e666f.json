@@ -1,1 +1,1 @@
-{"id":"1df6fa6e4abf98d0718b6b7c378e666f","fullName":"tests.unit_tests.test_undistort.TestUndistortPointsVsOpenCV#test_arducam_5_coeffs","name":"test_arducam_5_coeffs[1919.0-1079.0]","status":"passed","testResultsByEnv":{"default":"d634e749f6d592123b168198808e3c75"}}
+{"id":"1df6fa6e4abf98d0718b6b7c378e666f","fullName":"tests.unit_tests.test_undistort.TestUndistortPointsVsOpenCV#test_arducam_5_coeffs","name":"test_arducam_5_coeffs[960.0-540.0]","status":"passed","testResultsByEnv":{"default":"6d6f9f4d664ec118f3adfca61f31accd"}}

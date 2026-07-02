@@ -1,1 +1,1 @@
-{"id":"3239723b84f514296904fcb838793783","fullName":"tests.unit_tests.test_daemon_instrumentation#test_acquire_media_emits_lifecycle_events","name":"test_acquire_media_emits_lifecycle_events","status":"passed","testResultsByEnv":{"default":"f61467cd21177250fbf2742112fa5c7c"}}
+{"id":"3239723b84f514296904fcb838793783","fullName":"tests.unit_tests.test_daemon_instrumentation#test_acquire_media_emits_lifecycle_events","name":"test_acquire_media_emits_lifecycle_events","status":"passed","testResultsByEnv":{"default":"15ddd9d3336c571248a756e416e3da13"}}

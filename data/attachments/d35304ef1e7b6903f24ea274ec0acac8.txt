@@ -1,4 +1,0 @@
-{"ts":"2026-07-02T10:24:54+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"instrumentation.configured","message":"Daemon instrumentation configured","attrs":{"mode":"basic","log_level":"INFO","log_file":"/tmp/pytest-of-runner/pytest-0/test_media_construct_failure_w0/daemon.jsonl"}}
-{"ts":"2026-07-02T10:24:54+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Daemon version: 1.8.4","message":"Daemon version: 1.8.4","attrs":{}}
-{"ts":"2026-07-02T10:24:54+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.media.construct.error","message":"daemon.media.construct.error","attrs":{"error":"camera boom","error_type":"RuntimeError"}}
-{"ts":"2026-07-02T10:24:54+0000","level":"ERROR","logger":"reachy_mini.daemon.daemon","event":"Failed to initialize media server: camera boom","message":"Failed to initialize media server: camera boom","attrs":{}}

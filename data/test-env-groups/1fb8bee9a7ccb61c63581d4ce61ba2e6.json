@@ -1,1 +1,1 @@
-{"id":"1fb8bee9a7ccb61c63581d4ce61ba2e6","fullName":"tests.unit_tests.test_wifi_config.TestEnsureWifiOnStartup#test_runs_rescan_when_disconnected","name":"test_runs_rescan_when_disconnected","status":"passed","testResultsByEnv":{"default":"b1d086470b3185059f94ab28c020ebd9"}}
+{"id":"1fb8bee9a7ccb61c63581d4ce61ba2e6","fullName":"tests.unit_tests.test_wifi_config.TestEnsureWifiOnStartup#test_runs_rescan_when_disconnected","name":"test_runs_rescan_when_disconnected","status":"passed","testResultsByEnv":{"default":"4367bdaf84a36c3e6e2b398a348b5797"}}

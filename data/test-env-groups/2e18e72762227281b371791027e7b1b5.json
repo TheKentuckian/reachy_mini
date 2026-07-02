@@ -1,1 +1,1 @@
-{"id":"2e18e72762227281b371791027e7b1b5","fullName":"tests.unit_tests.test_daemon_instrumentation#test_log_event_writes_basic_structured_event","name":"test_log_event_writes_basic_structured_event","status":"passed","testResultsByEnv":{"default":"95f184a2dd6df4d7da7407f872a80ee1"}}
+{"id":"2e18e72762227281b371791027e7b1b5","fullName":"tests.unit_tests.test_daemon_instrumentation#test_log_event_writes_basic_structured_event","name":"test_log_event_writes_basic_structured_event","status":"passed","testResultsByEnv":{"default":"bda06a34d278ff9814775dc59d72861e"}}

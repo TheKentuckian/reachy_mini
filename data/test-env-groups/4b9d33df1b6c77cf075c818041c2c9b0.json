@@ -1,1 +1,1 @@
-{"id":"4b9d33df1b6c77cf075c818041c2c9b0","fullName":"tests.unit_tests.test_wifi_connect_retry#test_rescan_failure_is_non_fatal","name":"test_rescan_failure_is_non_fatal","status":"passed","testResultsByEnv":{"default":"f2307a92d5bb13fc1c843d7327bce31c"}}
+{"id":"4b9d33df1b6c77cf075c818041c2c9b0","fullName":"tests.unit_tests.test_wifi_connect_retry#test_rescan_failure_is_non_fatal","name":"test_rescan_failure_is_non_fatal","status":"passed","testResultsByEnv":{"default":"f3980b90b7192b2a5d6ac96f3609500a"}}

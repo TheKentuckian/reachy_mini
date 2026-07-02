@@ -10,17 +10,17 @@
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 101964,
-  "createdAt": 1782987903006,
+  "duration": 102294,
+  "createdAt": 1782989187335,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "fca3bac6-903b-4741-a650-0b7924235417",
+    "reportId": "5aab866a-8d78-463f-ba5a-2325434bd906",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/TheKentuckian/reachy_mini/actions/runs/28582926660",
+  "jobHref": "https://github.com/TheKentuckian/reachy_mini/actions/runs/28584103922",
   "href": "awesome/",
   "coverage": 34
 }

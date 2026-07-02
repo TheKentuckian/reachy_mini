@@ -1,1 +1,1 @@
-{"id":"cbc39bc9afd7257ce417466515a8ac5a","fullName":"tests.unit_tests.test_wifi_config.TestEnsureWifiOnStartup#test_skips_rescan_when_wlan_active","name":"test_skips_rescan_when_wlan_active","status":"passed","testResultsByEnv":{"default":"0d954f3d75d82e92bee1c34f6fb27faf"}}
+{"id":"cbc39bc9afd7257ce417466515a8ac5a","fullName":"tests.unit_tests.test_wifi_config.TestEnsureWifiOnStartup#test_skips_rescan_when_wlan_active","name":"test_skips_rescan_when_wlan_active","status":"passed","testResultsByEnv":{"default":"2b55efb2b58dc23f7b7a17f768af73b0"}}
