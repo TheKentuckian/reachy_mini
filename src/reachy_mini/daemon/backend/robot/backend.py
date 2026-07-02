@@ -127,6 +127,10 @@ class RobotBackend(Backend):
         self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
         self.target_head_joint_current = None  # Placeholder for head joint torque
 
+        # Track last sent positions to avoid redundant writes
+        self._last_sent_head_positions: npt.NDArray[np.float64] | None = None
+        self._last_sent_antenna_positions: npt.NDArray[np.float64] | None = None
+
         if hardware_error_check_frequency <= 0:
             raise ValueError(
                 "hardware_error_check_frequency must be positive and non-zero (Hz)."
@@ -200,11 +204,15 @@ class RobotBackend(Backend):
 
         if self._torque_enabled:
             if self._current_head_operation_mode != 0:  # if position control mode
-                if self.target_head_joint_positions is not None:
+                if self.target_head_joint_positions is not None and (
+                    self._last_sent_head_positions is None
+                    or not np.array_equal(self.target_head_joint_positions, self._last_sent_head_positions)
+                ):
                     self.c.set_stewart_platform_position(
                         self.target_head_joint_positions[1:].tolist()
                     )
                     self.c.set_body_rotation(self.target_head_joint_positions[0])
+                    self._last_sent_head_positions = self.target_head_joint_positions.copy()
             else:  # it's in torque control mode
                 if self.gravity_compensation_mode:
                     # This function will set the head_joint_current
@@ -220,16 +228,14 @@ class RobotBackend(Backend):
                     # self.c.set_body_rotation_goal_current(int(self.target_head_joint_current[0]))
 
             if self._current_antennas_operation_mode != 0:  # if position control mode
-                if self.target_antenna_joint_positions is not None:
+                if self.target_antenna_joint_positions is not None and (
+                    self._last_sent_antenna_positions is None
+                    or not np.array_equal(self.target_antenna_joint_positions, self._last_sent_antenna_positions)
+                ):
                     self.c.set_antennas_positions(
                         self.target_antenna_joint_positions.tolist()
                     )
-            # Antenna torque control is not supported with feetech motors
-            # else:
-            #     if self.target_antenna_joint_current is not None:
-            #         self.c.set_antennas_goal_current(
-            #            np.round(self.target_antenna_joint_current, 0).astype(int).tolist()
-            #         )
+                    self._last_sent_antenna_positions = self.target_antenna_joint_positions.copy()
 
         if (
             self.joint_positions_publisher is not None
@@ -362,6 +368,11 @@ class RobotBackend(Backend):
 
         self.c.enable_torque()
         self._torque_enabled = True
+        # The direct position writes above bypass the redundant-write cache; a
+        # target equal to the last pre-disable send must still be written on the
+        # next tick (the servo was re-pinned to *present* pose, not the target).
+        self._last_sent_head_positions = None
+        self._last_sent_antenna_positions = None
 
     def disable_motors(self) -> None:
         """Disable the motors by turning the torque off."""
@@ -424,6 +435,10 @@ class RobotBackend(Backend):
             self.c.enable_stewart_platform(True)
 
         self._current_head_operation_mode = mode
+        # Mode switches write present positions directly (above), bypassing the
+        # redundant-write cache — invalidate it so the next tick's target is
+        # always re-sent even if numerically equal to the last cached send.
+        self._last_sent_head_positions = None
 
     def set_antennas_operation_mode(self, mode: int) -> None:
         """Change the operation mode of the antennas motors.
@@ -464,6 +479,9 @@ class RobotBackend(Backend):
                 self.c.enable_antennas(False)
 
             self._current_antennas_operation_mode = mode
+            # Same cache invalidation as set_head_operation_mode: the direct
+            # write above bypasses the redundant-write cache.
+            self._last_sent_antenna_positions = None
 
     def _read_motor_state(self) -> Any:
         """Read the latest motor state, instrumenting comms errors (issue #31).
