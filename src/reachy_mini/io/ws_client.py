@@ -4,6 +4,7 @@ Connects to the daemon's /ws/sdk endpoint and provides cached state,
 fire-and-forget commands, and task request/progress tracking.
 """
 
+import ipaddress
 import logging
 import threading
 import time
@@ -34,6 +35,22 @@ from reachy_mini.io.protocol import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _is_loopback_host(host: str) -> bool:
+    """True if *host* refers to the local machine (loopback).
+
+    The SDK<->daemon ``/ws/sdk`` channel carries a high-frequency command +
+    state stream. Over loopback (the on-robot app<->daemon case) permessage-
+    deflate is pure CPU overhead on the CPU-bound Pi, so we disable it there
+    while keeping compression on for genuine remote connections.
+    """
+    if host in ("localhost", "127.0.0.1", "::1", ""):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 class WSClient(AbstractClient):
@@ -72,8 +89,12 @@ class WSClient(AbstractClient):
         self._heartbeat = threading.Event()
 
         uri = f"ws://{host}:{port}/ws/sdk"
+        # Disable permessage-deflate for loopback (on-robot app<->daemon): over
+        # localhost, compression only burns CPU on the Pi and buys nothing.
+        # Remote connections keep the default compression to save bandwidth.
+        compression = None if _is_loopback_host(host) else "deflate"
         try:
-            self._ws = ws_sync.connect(uri)
+            self._ws = ws_sync.connect(uri, compression=compression)
         except (OSError, websockets.exceptions.InvalidHandshake, TimeoutError) as e:
             raise ConnectionError(f"Failed to connect to {uri}: {e}") from e
 
