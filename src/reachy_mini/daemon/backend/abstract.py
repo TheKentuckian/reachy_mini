@@ -185,6 +185,37 @@ def _resolve_control_loop_hz(
     return max(lo, min(hi, hz))
 
 
+def _resolve_imu_read_period(
+    raw: "str | None",
+    motor_opts_disabled: bool,
+    control_loop_hz: float,
+    *,
+    lo_hz: float = 1.0,
+) -> "float | None":
+    """Resolve the opt-in IMU read period (seconds) from ``REACHY_MINI_IMU_HZ``.
+
+    Returns ``None`` for stock behavior (read the IMU every control-loop tick),
+    which is the default when the env var is unset or unparseable, and is forced
+    by the emergency master kill (``motor_opts_disabled``) — same two-tier
+    policy as FK-skip and the control-loop knob. A valid override is clamped to
+    ``[lo_hz, control_loop_hz]``: reading faster than the loop tick is
+    meaningless, and below 1 Hz the SDK's cached ``imu`` property gets too
+    stale to be useful.
+
+    Profiling context (2026-07-07, ricci at idle): the stock every-tick IMU
+    path is 6 blocking I2C transactions + a Madgwick update per 50 Hz tick —
+    ~12 ms of every 20 ms tick, ~60% of the backend thread's wall time.
+    """
+    if motor_opts_disabled or raw is None:
+        return None
+    try:
+        hz = float(raw)
+    except (TypeError, ValueError):
+        return None
+    hz = max(lo_hz, min(control_loop_hz, hz))
+    return 1.0 / hz
+
+
 def _fk_skip_active(fk_skip_flag: bool, motor_opts_disabled: bool) -> bool:
     """Whether the FK-skip optimization is active.
 
