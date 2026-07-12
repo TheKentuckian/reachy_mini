@@ -1,7 +1,0 @@
-{"ts":"2026-07-12T12:45:27+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"instrumentation.configured","message":"Daemon instrumentation configured","attrs":{"mode":"basic","log_level":"INFO","log_file":"/tmp/pytest-of-runner/pytest-0/test_acquire_media_emits_lifec0/daemon.jsonl"}}
-{"ts":"2026-07-12T12:45:27+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Daemon version: 1.9.0","message":"Daemon version: 1.9.0","attrs":{}}
-{"ts":"2026-07-12T12:45:27+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Media disabled (--no-media). No camera, audio, or media server.","message":"Media disabled (--no-media). No camera, audio, or media server.","attrs":{}}
-{"ts":"2026-07-12T12:45:27+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Re-acquiring media hardware...","message":"Re-acquiring media hardware...","attrs":{}}
-{"ts":"2026-07-12T12:45:27+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.media.acquire.start","message":"daemon.media.acquire.start","attrs":{}}
-{"ts":"2026-07-12T12:45:27+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Media hardware re-acquired.","message":"Media hardware re-acquired.","attrs":{}}
-{"ts":"2026-07-12T12:45:27+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.media.acquire.complete","message":"daemon.media.acquire.complete","attrs":{"media_released":false}}

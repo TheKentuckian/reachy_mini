@@ -1,0 +1,10 @@
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"instrumentation.configured","message":"Daemon instrumentation configured","attrs":{"mode":"trace","log_level":"INFO","log_file":"/tmp/pytest-of-runner/pytest-0/test_release_media_writes_trac0/daemon.jsonl"}}
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Daemon version: 1.9.0","message":"Daemon version: 1.9.0","attrs":{}}
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Media disabled (--no-media). No camera, audio, or media server.","message":"Media disabled (--no-media). No camera, audio, or media server.","attrs":{}}
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Releasing media hardware for direct access...","message":"Releasing media hardware for direct access...","attrs":{}}
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.media.release.start","message":"daemon.media.release.start","attrs":{}}
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"span.end","message":"daemon.media.stop","attrs":{"name":"daemon.media.stop","source":"release_media","duration_ms":0.006,"outcome":"ok"}}
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Central signaling relay stopped","message":"Central signaling relay stopped","attrs":{}}
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"span.end","message":"daemon.central_relay.stop","attrs":{"name":"daemon.central_relay.stop","source":"release_media","duration_ms":0.069,"outcome":"ok"}}
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.daemon","event":"Media hardware released.","message":"Media hardware released.","attrs":{}}
+{"ts":"2026-07-12T12:49:37+0000","level":"INFO","logger":"reachy_mini.daemon.instrumentation","event":"daemon.media.release.complete","message":"daemon.media.release.complete","attrs":{"media_released":true}}

@@ -1,0 +1,78 @@
+INFO     reachy_mini.daemon.daemon:daemon.py:68 Daemon version: 1.9.0
+INFO     reachy_mini.daemon.daemon:daemon.py:125 Media disabled (--no-media). No camera, audio, or media server.
+INFO     reachy_mini.daemon.daemon:daemon.py:297 Daemon start parameters: sim=False, mockup_sim=True, serialport=auto, scene=empty, wake_up_on_start=False, check_collision=False, kinematics_engine=AnalyticalKinematics, headless=True, hardware_config_filepath=None
+INFO     reachy_mini.daemon.daemon:daemon.py:323 Starting Reachy Mini daemon...
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:263 Using AnalyticalKinematics kinematics engine
+INFO     reachy_mini.daemon.daemon:daemon.py:451 Daemon started successfully.
+INFO     reachy_mini.daemon.daemon:utils.py:22 Running command: uv pip install --python /home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/bin/python /home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/faulty_app
+ERROR    reachy_mini.daemon.daemon:utils.py:45 Resolved 74 packages in 25ms
+   Building faulty-app @ file:///home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/faulty_app
+      Built faulty-app @ file:///home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/faulty_app
+Prepared 1 package in 575ms
+Installed 1 package in 0.60ms
+ + faulty-app==0.1.0 (from file:///home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/faulty_app)
+INFO     reachy_mini.daemon.daemon:local_common_venv.py:661 Saved metadata for 'faulty_app': {'path': '/home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/faulty_app'}
+WARNING  reachy_mini.apps.manager.runner:manager.py:220 [0;93m2026-07-12 12:49:17.255644983 [W:onnxruntime:Default, device_discovery.cc:133 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+ERROR    reachy_mini.apps.manager.runner:manager.py:217 Traceback (most recent call last):
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/io/ws_client.py", line 76, in __init__
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     self._ws = ws_sync.connect(uri)
+WARNING  reachy_mini.apps.manager.runner:manager.py:220                ^^^^^^^^^^^^^^^^^^^^
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/websockets/sync/client.py", line 324, in connect
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     sock = socket.create_connection(
+WARNING  reachy_mini.apps.manager.runner:manager.py:220            ^^^^^^^^^^^^^^^^^^^^^^^^^
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/usr/lib/python3.12/socket.py", line 828, in create_connection
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+WARNING  reachy_mini.apps.manager.runner:manager.py:220                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/usr/lib/python3.12/socket.py", line 963, in getaddrinfo
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+WARNING  reachy_mini.apps.manager.runner:manager.py:220                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+WARNING  reachy_mini.apps.manager.runner:manager.py:220 socket.gaierror: [Errno -3] Temporary failure in name resolution
+WARNING  reachy_mini.apps.manager.runner:manager.py:220 
+WARNING  reachy_mini.apps.manager.runner:manager.py:220 The above exception was the direct cause of the following exception:
+WARNING  reachy_mini.apps.manager.runner:manager.py:220 
+ERROR    reachy_mini.apps.manager.runner:manager.py:217 Traceback (most recent call last):
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/reachy_mini.py", line 502, in _initialize_client
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     client = self._connect_single(
+WARNING  reachy_mini.apps.manager.runner:manager.py:220              ^^^^^^^^^^^^^^^^^^^^^
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/reachy_mini.py", line 517, in _connect_single
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     client = WSClient(host, port)
+WARNING  reachy_mini.apps.manager.runner:manager.py:220              ^^^^^^^^^^^^^^^^^^^^
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/io/ws_client.py", line 78, in __init__
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     raise ConnectionError(f"Failed to connect to {uri}: {e}") from e
+ERROR    reachy_mini.apps.manager.runner:manager.py:217 ConnectionError: Failed to connect to ws://reachy-mini.local:8000/ws/sdk: [Errno -3] Temporary failure in name resolution
+WARNING  reachy_mini.apps.manager.runner:manager.py:220 
+WARNING  reachy_mini.apps.manager.runner:manager.py:220 During handling of the above exception, another exception occurred:
+WARNING  reachy_mini.apps.manager.runner:manager.py:220 
+ERROR    reachy_mini.apps.manager.runner:manager.py:217 Traceback (most recent call last):
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "<frozen runpy>", line 198, in _run_module_as_main
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "<frozen runpy>", line 88, in _run_code
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/faulty_app/main.py", line 19, in <module>
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     app.wrapped_run()
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/apps/app.py", line 138, in wrapped_run
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     with ReachyMini(
+WARNING  reachy_mini.apps.manager.runner:manager.py:220          ^^^^^^^^^^^
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/reachy_mini.py", line 150, in __init__
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     self.client, self.connection_mode = self._initialize_client(
+WARNING  reachy_mini.apps.manager.runner:manager.py:220                                         ^^^^^^^^^^^^^^^^^^^^^^^^
+WARNING  reachy_mini.apps.manager.runner:manager.py:220   File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/reachy_mini.py", line 506, in _initialize_client
+WARNING  reachy_mini.apps.manager.runner:manager.py:220     raise ConnectionError(
+ERROR    reachy_mini.apps.manager.runner:manager.py:217 ConnectionError: Network connection attempt failed. Make sure a Reachy Mini daemon is running and accessible.
+ERROR    reachy_mini.apps.manager.runner:manager.py:242 App faulty_app exited with code 1. Last stderr output:
+    app.wrapped_run()
+  File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/apps/app.py", line 138, in wrapped_run
+    with ReachyMini(
+         ^^^^^^^^^^^
+  File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/reachy_mini.py", line 150, in __init__
+    self.client, self.connection_mode = self._initialize_client(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/lib/python3.12/site-packages/reachy_mini/reachy_mini.py", line 506, in _initialize_client
+    raise ConnectionError(
+ConnectionError: Network connection attempt failed. Make sure a Reachy Mini daemon is running and accessible.
+INFO     reachy_mini.daemon.daemon:local_common_venv.py:754 Removing package faulty_app
+INFO     reachy_mini.daemon.daemon:utils.py:22 Running command: uv pip uninstall --python /home/runner/work/_temp/setup-uv-cache/builds-v0/.tmpPg2gf7/bin/python faulty_app
+ERROR    reachy_mini.daemon.daemon:utils.py:45 Uninstalled 1 package in 1ms
+ - faulty-app==0.1.0 (from file:///home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/faulty_app)
+INFO     reachy_mini.daemon.daemon:local_common_venv.py:770 Successfully uninstalled 'faulty_app'
+INFO     reachy_mini.daemon.daemon:daemon.py:495 Stopping Reachy Mini daemon...
+INFO     reachy_mini.daemon.daemon:daemon.py:579 Daemon stopped successfully.
+WARNING  reachy_mini.daemon.daemon:daemon.py:481 Daemon is already stopped.
