@@ -1,0 +1,8 @@
+INFO     reachy_mini.daemon.daemon:daemon.py:68 Daemon version: 1.9.0
+INFO     reachy_mini.daemon.daemon:daemon.py:125 Media disabled (--no-media). No camera, audio, or media server.
+INFO     reachy_mini.daemon.daemon:daemon.py:297 Daemon start parameters: sim=False, mockup_sim=True, serialport=auto, scene=empty, wake_up_on_start=False, check_collision=False, kinematics_engine=AnalyticalKinematics, headless=True, hardware_config_filepath=None
+INFO     reachy_mini.daemon.daemon:daemon.py:323 Starting Reachy Mini daemon...
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:263 Using AnalyticalKinematics kinematics engine
+INFO     reachy_mini.daemon.daemon:daemon.py:451 Daemon started successfully.
+INFO     reachy_mini.daemon.daemon:daemon.py:495 Stopping Reachy Mini daemon...
+INFO     reachy_mini.daemon.daemon:daemon.py:579 Daemon stopped successfully.

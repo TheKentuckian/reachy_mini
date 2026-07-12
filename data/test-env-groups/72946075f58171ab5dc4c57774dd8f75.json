@@ -1,1 +1,1 @@
-{"id":"72946075f58171ab5dc4c57774dd8f75","fullName":"tests.unit_tests.test_media_upload_api#test_disallowed_extension_is_rejected","name":"test_disallowed_extension_is_rejected","status":"passed","testResultsByEnv":{"default":"4f9c82e8bfd38aef9977805c53e7e9eb"}}
+{"id":"72946075f58171ab5dc4c57774dd8f75","fullName":"tests.unit_tests.test_media_upload_api#test_disallowed_extension_is_rejected","name":"test_disallowed_extension_is_rejected","status":"passed","testResultsByEnv":{"default":"9b1f13f395c712084f38671b5dcc85bd"}}
