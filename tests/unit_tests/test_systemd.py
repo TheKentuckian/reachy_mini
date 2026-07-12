@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import socket
+import tempfile
 from pathlib import Path
 
 from reachy_mini.daemon.systemd import SystemdNotifier
@@ -18,23 +19,26 @@ def test_notifier_is_disabled_without_notify_socket() -> None:
     notifier.ready()
 
 
-def test_notifier_sends_ready_status_and_watchdog(tmp_path: Path) -> None:
+def test_notifier_sends_ready_status_and_watchdog() -> None:
     """Systemd payloads are sent to the configured Unix datagram socket."""
-    socket_path = tmp_path / "notify.sock"
-    receiver = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-    receiver.bind(str(socket_path))
-    receiver.settimeout(1.0)
+    # macOS caps AF_UNIX socket paths at ~104 bytes; pytest's tmp_path on CI
+    # runners exceeds that, so bind under /tmp instead.
+    with tempfile.TemporaryDirectory(dir="/tmp") as socket_dir:
+        socket_path = Path(socket_dir) / "notify.sock"
+        receiver = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        receiver.bind(str(socket_path))
+        receiver.settimeout(1.0)
 
-    try:
-        notifier = SystemdNotifier(str(socket_path), watchdog_usec=4_000_000)
+        try:
+            notifier = SystemdNotifier(str(socket_path), watchdog_usec=4_000_000)
 
-        notifier.status("Starting test daemon")
-        notifier.ready("Test daemon ready")
-        notifier.watchdog()
+            notifier.status("Starting test daemon")
+            notifier.ready("Test daemon ready")
+            notifier.watchdog()
 
-        payloads = [receiver.recv(1024).decode() for _ in range(3)]
-    finally:
-        receiver.close()
+            payloads = [receiver.recv(1024).decode() for _ in range(3)]
+        finally:
+            receiver.close()
 
     assert payloads == [
         "STATUS=Starting test daemon",
