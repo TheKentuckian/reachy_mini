@@ -1,1 +1,1 @@
-{"id":"6c68e73fe18238a8da4a0d92d8231923","fullName":"tests.unit_tests.test_antenna_sleep_monitor#test_wake_suppressed_when_current_app_set","name":"test_wake_suppressed_when_current_app_set","status":"passed","testResultsByEnv":{"default":"4f053163b253ffae468e8ef694f5e6cc"}}
+{"id":"6c68e73fe18238a8da4a0d92d8231923","fullName":"tests.unit_tests.test_antenna_sleep_monitor#test_wake_suppressed_when_current_app_set","name":"test_wake_suppressed_when_current_app_set","status":"passed","testResultsByEnv":{"default":"8e027cb06d6e31195960936a3dee7721"}}
