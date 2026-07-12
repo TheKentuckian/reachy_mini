@@ -147,7 +147,7 @@ motors:
       shutdown_error: 52
       operating_mode: 3
       pid:
-        - 200
+        - 50
         - 0
         - 0
   - left_antenna:
@@ -159,6 +159,6 @@ motors:
       shutdown_error: 52
       operating_mode: 3
       pid:
-        - 200
+        - 50
         - 0
         - 0
