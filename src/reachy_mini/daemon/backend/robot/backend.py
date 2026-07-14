@@ -33,6 +33,7 @@ from ..abstract import (
     Backend,
     _env_flag,
     _resolve_control_loop_hz,
+    _resolve_imu_read_period,
 )
 
 
@@ -139,6 +140,22 @@ class RobotBackend(Backend):
         self.hardware_error_check_period = (
             1.0 / hardware_error_check_frequency
         )  # seconds
+
+        # Opt-in IMU read decimation (REACHY_MINI_IMU_HZ; None = stock
+        # every-tick reads). Profiled 2026-07-07: the stock path costs ~12 ms
+        # of every 20 ms tick (6 I2C transactions + Madgwick), ~60% of this
+        # thread's wall time at idle. The rate-limited path reads accel+gyro
+        # ONCE per gated tick (stock get_quat re-reads both internally),
+        # integrates the quaternion with the real elapsed dt, and refreshes
+        # temperature at most once per second.
+        self._imu_read_period = _resolve_imu_read_period(
+            os.environ.get("REACHY_MINI_IMU_HZ"),
+            _env_flag(_MOTOR_OPTS_KILL_ENV, default=False),
+            self.control_loop_frequency,
+        )
+        self._imu_last_read_t: float | None = None
+        self._imu_temp_read_t: float | None = None
+        self._imu_last_temperature: float | None = None
 
         # Initialize IMU for wireless version
         if wireless_version:
@@ -276,7 +293,11 @@ class RobotBackend(Backend):
                     )
 
                     if self.imu_publisher is not None and self.bmi088 is not None:
-                        imu_msg = self.get_imu_data()
+                        imu_msg = (
+                            self.get_imu_data()
+                            if self._imu_read_period is None
+                            else self._get_imu_data_rate_limited()
+                        )
                         if imu_msg is not None:
                             self.imu_publisher.put(imu_msg)
 
@@ -576,6 +597,78 @@ class RobotBackend(Backend):
             )
         except Exception as e:
             self.logger.error(f"Error reading IMU data: {e}")
+            return None
+
+    def _get_imu_data_rate_limited(self) -> ImuDataMsg | None:
+        """Rate-limited IMU read (active only when ``REACHY_MINI_IMU_HZ`` is set).
+
+        Differences from the stock ``get_imu_data`` path, all in the name of
+        cutting I2C traffic (profiled at ~60% of the backend thread's wall
+        time at idle when read every tick):
+
+        - Returns ``None`` without touching the bus until ``_imu_read_period``
+          has elapsed since the last attempt (the caller simply skips the
+          publish that tick — SDK clients keep their cached last value).
+        - Reads the accelerometer and gyroscope ONCE and feeds the library's
+          own Madgwick filter directly; stock ``get_quat`` re-reads both
+          sensors internally, doubling the block reads.
+        - Integrates the quaternion with the real elapsed time since the last
+          read instead of the hardcoded control-loop period (required for
+          correctness once reads are decimated).
+        - Reads the (slow-moving) temperature at most once per second and
+          serves the cached value otherwise; stock reads it every tick (2 of
+          the 6 per-tick I2C transactions).
+
+        The accelerometer is read in g (same units stock ``get_quat`` feeds
+        the filter — Madgwick normalizes the accel vector, so the choice only
+        matters for reproducing stock filter inputs exactly) and converted to
+        m/s^2 for the published message, matching ``get_imu_data``'s output.
+        """
+        if self.bmi088 is None:
+            return None
+        assert self._imu_read_period is not None, (
+            "_get_imu_data_rate_limited called without REACHY_MINI_IMU_HZ set"
+        )
+
+        now = time.monotonic()
+        last = self._imu_last_read_t
+        if last is not None and (now - last) < self._imu_read_period:
+            return None
+        # Mark the attempt up front so a failing sensor is retried (and its
+        # error logged) at the gated rate, not at the full tick rate.
+        self._imu_last_read_t = now
+        dt = (now - last) if last is not None else self._imu_read_period
+
+        try:
+            acc_g = self.bmi088.read_accelerometer()  # in g, as stock get_quat uses
+            gyro = self.bmi088.read_gyroscope(deg_per_s=False)  # rad/s
+
+            quat = self.bmi088.madgwick.updateIMU(
+                q=np.asarray(self.bmi088.q, dtype=float),
+                gyr=np.asarray(gyro, dtype=float),
+                acc=np.asarray(acc_g, dtype=float),
+                dt=dt,
+            )
+            # Keep the library's filter state coherent (same as get_quat does).
+            self.bmi088.q = list(quat)
+
+            if (
+                self._imu_last_temperature is None
+                or self._imu_temp_read_t is None
+                or (now - self._imu_temp_read_t) >= 1.0
+            ):
+                self._imu_last_temperature = float(self.bmi088.read_temperature())
+                self._imu_temp_read_t = now
+
+            g_to_m_per_s2 = 9.80665
+            return ImuDataMsg(
+                accelerometer=[float(a) * g_to_m_per_s2 for a in acc_g],
+                gyroscope=[float(w) for w in gyro],
+                quaternion=[float(q) for q in quat],
+                temperature=self._imu_last_temperature,
+            )
+        except Exception as e:
+            self.logger.error(f"Error reading IMU data (rate-limited path): {e}")
             return None
 
     def compensate_head_gravity(self) -> None:
