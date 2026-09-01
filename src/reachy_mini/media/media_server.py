@@ -229,7 +229,7 @@ class GstMediaServer:
                     self._logger.warning(
                         "Camera disabled (REACHY_MINI_CAMERA_ENABLED=0): skipping camera capture."
                     )
-                    cam_path, detected_specs = None, None
+                    cam_path, detected_specs = "", None
                 else:
                     cam_path, detected_specs = get_video_device()
                 if detected_specs is None:
