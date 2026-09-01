@@ -109,6 +109,9 @@ class Args:
     fastapi_host: str | None = None
     fastapi_port: int = 8000
 
+    # Fork: HF central signaling relay (remote WebRTC access) is opt-in.
+    central_relay: bool = False
+
 
 def _resolve_bind_host(args: Args) -> str:
     """Resolve the address the HTTP API binds to.
@@ -313,6 +316,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         log_level=args.log_level,
         no_media=args.no_media,
         sim_mode=sim_mode,
+        central_relay=args.central_relay,
     )
     app.state.app_manager = AppManager(
         wireless_version=args.wireless_version,
@@ -890,6 +894,20 @@ def main() -> None:
         default=default_args.dataset_update_interval_hours,
         dest="dataset_update_interval_hours",
         help="Interval in hours for background dataset update checks (default: 24.0, 0 to disable).",
+    )
+    # Central relay options (fork: default off)
+    parser.add_argument(
+        "--central-relay",
+        action="store_true",
+        default=default_args.central_relay,
+        dest="central_relay",
+        help="Enable the HuggingFace central signaling relay for remote WebRTC access (default: disabled).",
+    )
+    parser.add_argument(
+        "--no-central-relay",
+        action="store_false",
+        dest="central_relay",
+        help="Disable the HuggingFace central signaling relay (default).",
     )
     # Kinematics options
     parser.add_argument(

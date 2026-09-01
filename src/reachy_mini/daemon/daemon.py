@@ -51,6 +51,7 @@ class Daemon:
         desktop_app_daemon: bool = False,
         no_media: bool = False,
         sim_mode: SimulationMode = SimulationMode.NONE,
+        central_relay: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
@@ -62,6 +63,9 @@ class Daemon:
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
         self.no_media = no_media
+        # Fork: the HF central signaling relay (remote WebRTC access) is
+        # opt-in. Upstream auto-starts it whenever an HF token is present.
+        self.central_relay = central_relay
 
         self.backend: "RobotBackend | MujocoBackend | MockupSimBackend | None" = None
         # Get package version
@@ -191,6 +195,13 @@ class Daemon:
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
         global _central_relay_task
+
+        if not self.central_relay:
+            self.logger.info(
+                "Central signaling relay is disabled by policy (pass --central-relay "
+                "or set REACHY_CENTRAL_RELAY=1 in /etc/reachy-mini/relay.env to enable)"
+            )
+            return
 
         if not self._media_server:
             return

@@ -77,6 +77,18 @@ async def get_relay_status(request: Request) -> dict[str, Any]:
             "is_connected": False,
         }
 
+    # Fork: the relay is opt-in. Say so explicitly, otherwise a policy-off
+    # relay looks identical to a failed start ("Relay not initialized").
+    if daemon and not getattr(daemon, "central_relay", True):
+        return {
+            "state": "disabled",
+            "message": (
+                "Central relay disabled by policy (fork default). Enable with "
+                "--central-relay, or scripts/relay_on.sh on the robot."
+            ),
+            "is_connected": False,
+        }
+
     try:
         from reachy_mini.media.central_signaling_relay import get_relay_status
 
