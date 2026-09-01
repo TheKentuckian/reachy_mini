@@ -31,6 +31,7 @@ router = APIRouter(
 )
 
 busy_lock = Lock()
+wifi_init_lock = Lock()
 error: Exception | None = None
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,14 @@ def get_current_wifi_mode() -> WifiMode:
     """Get the current WiFi mode."""
     if busy_lock.locked():
         return WifiMode.BUSY
+    return _probe_wifi_mode()
 
+
+def _probe_wifi_mode() -> WifiMode:
+    """Ask NetworkManager for the current mode, ignoring ``busy_lock``.
+
+    For callers that already hold the lock (startup init).
+    """
     conn = get_wifi_connections()
     if check_if_connection_active("Hotspot"):
         return WifiMode.HOTSPOT
@@ -500,6 +508,7 @@ def remove_connection(name: str) -> None:
 WIFI_INIT_MAX_RETRIES = 5
 WIFI_INIT_RETRY_DELAY = 3  # seconds
 WIFI_INIT_TIMEOUT = 30  # seconds
+_wifi_init_thread: Thread | None = None
 
 
 def ensure_wifi_on_startup() -> None:
@@ -511,18 +520,34 @@ def ensure_wifi_on_startup() -> None:
     """
     for attempt in range(1, WIFI_INIT_MAX_RETRIES + 1):
         try:
-            # Make sure wlan0 is up and running
-            scan_available_wifi()
+            # Fast path: NM's cached state is authoritative when the device is
+            # already connected. Skip the ~4 s wifi_rescan() unless the
+            # interface is DISCONNECTED and we actually need to discover networks.
+            current_mode = get_current_wifi_mode()
+            if current_mode == WifiMode.BUSY:
+                # An HTTP handler (e.g. the BLE companion's /connect) owns the
+                # radio right now; retry rather than treating BUSY as "active".
+                raise RuntimeError("another WiFi operation is in progress")
+            if current_mode != WifiMode.DISCONNECTED:
+                logger.info(f"WiFi already active ({current_mode.value}), skipping rescan.")
+                return
 
-            # If no WiFi connection is active, set up the default hotspot
-            if get_current_wifi_mode() == WifiMode.DISCONNECTED:
-                logger.info("No WiFi connection active. Setting up hotspot...")
-                setup_wifi_connection(
-                    name="Hotspot",
-                    ssid=HOTSPOT_SSID,
-                    password=HOTSPOT_PASSWORD,
-                    is_hotspot=True,
-                )
+            # Disconnected: rescan so NM sees available networks, then make
+            # sure we have a hotspot to fall back to. This runs in a thread
+            # that overlaps HTTP serving, so hold busy_lock: handlers return
+            # 409 for the few seconds this takes instead of racing us on
+            # the single wlan0 radio.
+            with busy_lock:
+                scan_available_wifi()
+
+                if _probe_wifi_mode() == WifiMode.DISCONNECTED:
+                    logger.info("No WiFi connection active. Setting up hotspot...")
+                    setup_wifi_connection(
+                        name="Hotspot",
+                        ssid=HOTSPOT_SSID,
+                        password=HOTSPOT_PASSWORD,
+                        is_hotspot=True,
+                    )
             return
         except Exception as e:
             logger.warning(
@@ -537,11 +562,36 @@ def ensure_wifi_on_startup() -> None:
     )
 
 
-_wifi_init_thread = Thread(target=ensure_wifi_on_startup, daemon=True)
-_wifi_init_thread.start()
-_wifi_init_thread.join(timeout=WIFI_INIT_TIMEOUT)
-if _wifi_init_thread.is_alive():
-    logger.error(
-        f"WiFi initialization timed out after {WIFI_INIT_TIMEOUT}s. "
-        "Daemon will start without WiFi configured."
-    )
+def start_wifi_init_on_startup(
+    *,
+    block: bool = False,
+    timeout: float = WIFI_INIT_TIMEOUT,
+) -> Thread:
+    """Start WiFi initialization once, in a background thread.
+
+    Called from the daemon lifespan (wireless only) so it runs concurrently
+    with backend startup instead of blocking this module's import for up to
+    ``WIFI_INIT_TIMEOUT`` seconds. Idempotent: a second call while the
+    thread is alive returns the same thread.
+    """
+    global _wifi_init_thread
+
+    with wifi_init_lock:
+        if _wifi_init_thread is None or not _wifi_init_thread.is_alive():
+            _wifi_init_thread = Thread(
+                target=ensure_wifi_on_startup,
+                daemon=True,
+                name="reachy-mini-wifi-init",
+            )
+            _wifi_init_thread.start()
+        thread = _wifi_init_thread
+
+    if block:
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            logger.error(
+                f"WiFi initialization timed out after {timeout}s. "
+                "Daemon will start without WiFi configured."
+            )
+
+    return thread

@@ -201,6 +201,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                         app.state.app_manager, startup_app
                     )
 
+            # Kick off WiFi init in a background thread so it overlaps with
+            # backend startup rather than blocking the wifi_config router import.
+            if args.wireless_version:
+                from .routers import wifi_config
+
+                wifi_config.start_wifi_init_on_startup()
+
             if args.autostart:
                 await app.state.daemon.start(
                     serialport=args.serialport,
