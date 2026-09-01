@@ -1899,6 +1899,25 @@
         }
       }
     },
+    "/api/motors/voltage": {
+      "get": {
+        "summary": "Get Motor Voltage",
+        "description": "Read present bus voltage from a motor as a battery proxy.\n\nPercent is a linear estimate over the 2S LiFePO4 operating range\n(6.8\u20137.3 V). LiFePO4 discharges very flatly so treat it as a rough\nindicator, not a calibrated gauge.",
+        "operationId": "get_motor_voltage_api_motors_voltage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoltageStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/motors/set_mode/{mode}": {
       "post": {
         "summary": "Set Motor Mode",
@@ -3995,6 +4014,39 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VoltageStatus": {
+        "properties": {
+          "voltage_v": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voltage V"
+          },
+          "percent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "voltage_v",
+          "percent"
+        ],
+        "title": "VoltageStatus",
+        "description": "Present motor bus voltage and estimated battery percentage."
       },
       "VolumeRequest": {
         "properties": {
