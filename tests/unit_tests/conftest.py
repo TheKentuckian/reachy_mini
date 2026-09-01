@@ -34,7 +34,7 @@ def _webrtc_plugin_available() -> bool:
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
-    """Skip ``webrtc`` tests when the plugin is missing — unless it was asked for.
+    """Skip ``wireless`` (real robot) and, when the plugin is missing, ``webrtc`` tests.
 
     When the plugin isn't installed the webrtc-marked tests skip cleanly (local
     dev, macOS). But when the run explicitly selects them (``-m webrtc``), a
@@ -42,9 +42,23 @@ def pytest_collection_modifyitems(
     selected so they run and fail loudly (their GstWebRTCClient/GstMediaServer
     construction and the gst-launch producer error out on the missing elements).
     """
+    markexpr = config.getoption("markexpr") or ""
+
+    # Fork: ``wireless`` tests talk to a real robot at ``reachy-mini.local``
+    # (WebRTC signalling, ``/api/media/play_sound``, ``/ws/sdk``). Upstream
+    # registers the marker but never deselects it, so a plain ``pytest`` on a
+    # laptop sharing a LAN with the robot makes it play sounds. Auto-skip
+    # unless the run explicitly asks for them (``-m wireless``).
+    if "wireless" not in markexpr or "not wireless" in markexpr:
+        skip_wireless = pytest.mark.skip(
+            reason="requires a connected wireless Reachy Mini; select with -m wireless"
+        )
+        for item in items:
+            if item.get_closest_marker("wireless") is not None:
+                item.add_marker(skip_wireless)
+
     if _webrtc_plugin_available():
         return
-    markexpr = config.getoption("markexpr") or ""
     if "webrtc" in markexpr and "not webrtc" not in markexpr:
         return  # explicitly requested -> run and fail loudly
     skip = pytest.mark.skip(
