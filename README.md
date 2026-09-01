@@ -1,5 +1,7 @@
 # Reachy Mini 🤖
 
+> **Fork:** [TheKentuckian/reachy_mini](https://github.com/TheKentuckian/reachy_mini) = upstream v1.10.0 + a thin patch stack for our wireless units (power-button safe shutdown, opt-in central relay, battery voltage endpoint, …). See `COMPATIBILITY.md`.
+
 [![Ask on HuggingChat](https://img.shields.io/badge/Read_the-Documentation-yellow?logo=huggingface&logoColor=yellow)](https://huggingface.co/docs/reachy_mini/)
 [![Discord](https://img.shields.io/badge/Discord-Join_the_Community-7289DA?logo=discord&logoColor=white)](https://discord.gg/Y7FgMqHsub)
 

@@ -129,6 +129,8 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 
 ## Live/Web/JS Apps
 
+> **Fork note (TheKentuckian/reachy_mini):** The HuggingFace central signaling relay is **disabled by default** in this fork. JS apps — and Pollen's remote-view Space — require it. To re-enable, run `scripts/relay_on.sh` on the robot (writes `REACHY_CENTRAL_RELAY=1` to `/etc/reachy-mini/relay.env` and restarts the daemon); `scripts/relay_off.sh` turns it back off. If a JS app can't discover the robot (no robot in the picker), this is the first thing to check. See `COMPATIBILITY.md`.
+
 > ### START HERE: [`ts/APP_CREATION_GUIDE.md`](ts/APP_CREATION_GUIDE.md)
 >
 > That guide is the **single source of truth** for building a Reachy Mini JS app: scaffolding, `public/icon.svg`, host shell, `sdk: static` deploy, `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host ↔ embed architecture reference. Everything that used to live in `SPEC.md` and `APP_AUTHOR_GUIDE.md` is folded in.

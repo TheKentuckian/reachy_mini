@@ -1,5 +1,6 @@
 name: Pytest
 on:
+  workflow_dispatch:  # fork: manual runs on branches whose PR is unmergeable (re-base branches)
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
