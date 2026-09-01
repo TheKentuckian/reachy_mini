@@ -48,6 +48,7 @@ from reachy_mini.daemon.app.startup_app import (
 )
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.daemon.utils import SimulationMode
+from reachy_mini.io.protocol import DaemonState
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
     write_asoundrc_to_home,
@@ -661,18 +662,77 @@ def run_app(args: Args) -> None:
                     logger.info("Health check task cancelled.")
                     break
 
+        readiness_task: asyncio.Task[None] | None = None
+        _daemon_startup_failed = False
+
+        async def check_startup_state_when_serving() -> None:
+            """Exit non-zero if autostart left the daemon in a non-RUNNING state.
+
+            Wireless units only: there systemd supervises the daemon and
+            Restart=on-failure (plus a power cycle) is the recovery path, so
+            a process that keeps serving a dead backend is worse than one
+            that exits. ERROR paths in daemon.start(): backend.ready.wait()
+            timeout, wake_up() exception, or backend thread error. On a
+            Lite/desktop daemon there is no supervisor, so we keep serving
+            and leave POST /api/daemon/start available for recovery.
+            """
+            nonlocal _daemon_startup_failed
+            while not server.started and not server.should_exit:
+                await asyncio.sleep(0.05)
+            if not server.started:
+                return
+            daemon_status = app.state.daemon.status()
+            logger.info(
+                "Daemon serving: state=%s%s",
+                daemon_status.state.value,
+                f", error={daemon_status.error!r}" if daemon_status.error else "",
+            )
+            if (
+                args.wireless_version
+                and args.autostart
+                and daemon_status.state != DaemonState.RUNNING
+            ):
+                logger.error(
+                    "Daemon startup failed (state=%s); shutting down so systemd "
+                    "Restart=on-failure fires.",
+                    daemon_status.state.value,
+                )
+                # Graceful shutdown so the lifespan finally block still runs
+                # (Daemon.stop() skips goto_sleep in ERROR state — the robot
+                # was never enabled — but media/mDNS/app manager get cleaned
+                # up) before we exit non-zero.
+                _daemon_startup_failed = True
+                server.should_exit = True
+
         try:
+            readiness_task = asyncio.create_task(check_startup_state_when_serving())
             if args.timeout_health_check is not None:
                 health_check_task = asyncio.create_task(
                     health_check_timeout(args.timeout_health_check)
                 )
             await server.serve()
+            if _daemon_startup_failed:
+                raise RuntimeError(
+                    "Daemon failed to reach RUNNING state - exiting non-zero"
+                )
+            if not server.started:
+                # The lifespan raised before yield (startup-app install, mDNS,
+                # media...). Server.serve() returns normally in that case —
+                # only Server.run() maps it to a failure — so exit non-zero
+                # ourselves or systemd sees a clean exit and never restarts.
+                raise RuntimeError("Daemon startup failed (lifespan raised)")
         except KeyboardInterrupt:
             logger.info("Received Ctrl-C, shutting down gracefully.")
         except Exception as e:
             logger.exception(f"Error during server operation: {e}")
             raise
         finally:
+            if readiness_task and not readiness_task.done():
+                readiness_task.cancel()
+                try:
+                    await readiness_task
+                except asyncio.CancelledError:
+                    pass
             # Cancel health check task if it exists
             if health_check_task and not health_check_task.done():
                 health_check_task.cancel()
